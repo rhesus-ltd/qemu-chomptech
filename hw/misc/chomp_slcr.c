@@ -52,14 +52,32 @@ REG32(CLOCK_DIV1, 0x004)
 REG32(CLOCK_DIV2, 0x008)
 REG32(CLOCK_RST_EN, 0x00c)
 
+REG32(DACS_HCLK, 0x010)
+
+REG32(IMG_SENSOR_CFG, 0x014)
+
+REG32(TIMER1_CFG, 0x018)
+
+REG32(PWM0_CTRL, 0x02c)
+REG32(PWM1_CTRL, 0x030)
+
 REG32(INT_IRQ, 0x034)
 REG32(INT_FIQ, 0x038)
+REG32(WGPIO_POL, 0x03c)
+REG32(WGPIO_CLR, 0x040)
+REG32(WGPIO_EN, 0x044)
+REG32(WGPIO_STA, 0x48)
+REG32(INT_SYSCTL, 0x4c)
 
 REG32(POWER_CTRL, 0x050)
+REG32(BOOTUP_MODE, 0x054)
+REG32(MUL_FUNC_CTRL, 0x058)
 
-REG32(INT_STA, 0x0CC)
-
-REG32(SYSCTL, 0x04C)
+REG32(ANALOG_CTRL1, 0x05c)
+REG32(USB_REG_CFG, 0x060)
+REG32(ANALOG_CTRL2, 0x064)
+REG32(ANALOG_CTRL3, 0x068)
+REG32(ANALOG_CTRL4, 0x06c)
 
 REG32(SHARE_PIN_CRTL, 0x074)
 
@@ -72,141 +90,12 @@ REG32(GPIO_OUT_2, 0x088)
 REG32(GPIO_IN_1, 0x0BC)
 REG32(GPIO_IN_2, 0x0C0)
 
+REG32(INT_STA, 0x0CC)
 REG32(ANALOG, 0x098)
 
 REG32(GPIO_PULL_UD_1, 0x09C)
 REG32(GPIO_PULL_UD_2, 0x0A0)
 
-/* fields for [ARM|DDR|IO]_PLL_CTRL registers 
-    FIELD(xxx_PLL_CTRL, PLL_RESET, 0, 1)
-    FIELD(xxx_PLL_CTRL, PLL_PWRDWN, 1, 1)
-    FIELD(xxx_PLL_CTRL, PLL_BYPASS_QUAL, 3, 1)
-    FIELD(xxx_PLL_CTRL, PLL_BYPASS_FORCE, 4, 1)
-    FIELD(xxx_PLL_CTRL, PLL_FPDIV, 12, 7)
-REG32(PLL_STATUS, 0x10c)
-REG32(ARM_PLL_CFG, 0x110)
-REG32(DDR_PLL_CFG, 0x114)
-REG32(IO_PLL_CFG, 0x118)
-
-REG32(ARM_CLK_CTRL, 0x120)
-REG32(DDR_CLK_CTRL, 0x124)
-REG32(DCI_CLK_CTRL, 0x128)
-REG32(APER_CLK_CTRL, 0x12c)
-REG32(USB0_CLK_CTRL, 0x130)
-REG32(USB1_CLK_CTRL, 0x134)
-REG32(GEM0_RCLK_CTRL, 0x138)
-REG32(GEM1_RCLK_CTRL, 0x13c)
-REG32(GEM0_CLK_CTRL, 0x140)
-REG32(GEM1_CLK_CTRL, 0x144)
-REG32(SMC_CLK_CTRL, 0x148)
-REG32(LQSPI_CLK_CTRL, 0x14c)
-REG32(SDIO_CLK_CTRL, 0x150)
-REG32(UART_CLK_CTRL, 0x154)
-    FIELD(UART_CLK_CTRL, CLKACT0, 0, 1)
-    FIELD(UART_CLK_CTRL, CLKACT1, 1, 1)
-    FIELD(UART_CLK_CTRL, SRCSEL,  4, 2)
-    FIELD(UART_CLK_CTRL, DIVISOR, 8, 6)
-REG32(SPI_CLK_CTRL, 0x158)
-REG32(CAN_CLK_CTRL, 0x15c)
-REG32(CAN_MIOCLK_CTRL, 0x160)
-REG32(DBG_CLK_CTRL, 0x164)
-REG32(PCAP_CLK_CTRL, 0x168)
-REG32(TOPSW_CLK_CTRL, 0x16c)
-
-#define FPGA_CTRL_REGS(n, start) \
-    REG32(FPGA ## n ## _CLK_CTRL, (start)) \
-    REG32(FPGA ## n ## _THR_CTRL, (start) + 0x4)\
-    REG32(FPGA ## n ## _THR_CNT,  (start) + 0x8)\
-    REG32(FPGA ## n ## _THR_STA,  (start) + 0xc)
-FPGA_CTRL_REGS(0, 0x170)
-FPGA_CTRL_REGS(1, 0x180)
-FPGA_CTRL_REGS(2, 0x190)
-FPGA_CTRL_REGS(3, 0x1a0)
-
-REG32(BANDGAP_TRIP, 0x1b8)
-REG32(PLL_PREDIVISOR, 0x1c0)
-REG32(CLK_621_TRUE, 0x1c4)
-
-REG32(PSS_RST_CTRL, 0x200)
-    FIELD(PSS_RST_CTRL, SOFT_RST, 0, 1)
-REG32(DDR_RST_CTRL, 0x204)
-REG32(TOPSW_RESET_CTRL, 0x208)
-REG32(DMAC_RST_CTRL, 0x20c)
-REG32(USB_RST_CTRL, 0x210)
-REG32(GEM_RST_CTRL, 0x214)
-REG32(SDIO_RST_CTRL, 0x218)
-REG32(SPI_RST_CTRL, 0x21c)
-REG32(CAN_RST_CTRL, 0x220)
-REG32(I2C_RST_CTRL, 0x224)
-REG32(UART_RST_CTRL, 0x228)
-REG32(GPIO_RST_CTRL, 0x22c)
-REG32(LQSPI_RST_CTRL, 0x230)
-REG32(SMC_RST_CTRL, 0x234)
-REG32(OCM_RST_CTRL, 0x238)
-REG32(FPGA_RST_CTRL, 0x240)
-REG32(A9_CPU_RST_CTRL, 0x244)
-
-REG32(RS_AWDT_CTRL, 0x24c)
-REG32(RST_REASON, 0x250)
-
-REG32(REBOOT_STATUS, 0x258)
-REG32(BOOT_MODE, 0x25c)
-
-REG32(APU_CTRL, 0x300)
-REG32(WDT_CLK_SEL, 0x304)
-
-REG32(TZ_DMA_NS, 0x440)
-REG32(TZ_DMA_IRQ_NS, 0x444)
-REG32(TZ_DMA_PERIPH_NS, 0x448)
-
-REG32(PSS_IDCODE, 0x530)
-
-REG32(DDR_URGENT, 0x600)
-REG32(DDR_CAL_START, 0x60c)
-REG32(DDR_REF_START, 0x614)
-REG32(DDR_CMD_STA, 0x618)
-REG32(DDR_URGENT_SEL, 0x61c)
-REG32(DDR_DFI_STATUS, 0x620)
-
-REG32(MIO, 0x700)
-#define MIO_LENGTH 54
-
-REG32(MIO_LOOPBACK, 0x804)
-REG32(MIO_MST_TRI0, 0x808)
-REG32(MIO_MST_TRI1, 0x80c)
-
-REG32(SD0_WP_CD_SEL, 0x830)
-REG32(SD1_WP_CD_SEL, 0x834)
-
-REG32(LVL_SHFTR_EN, 0x900)
-REG32(OCM_CFG, 0x910)
-
-REG32(CPU_RAM, 0xa00)
-
-REG32(IOU, 0xa30)
-
-REG32(DMAC_RAM, 0xa50)
-
-REG32(AFI0, 0xa60)
-REG32(AFI1, 0xa6c)
-REG32(AFI2, 0xa78)
-REG32(AFI3, 0xa84)
-#define AFI_LENGTH 3
-
-REG32(OCM, 0xa90)
-
-REG32(DEVCI_RAM, 0xaa0)
-
-REG32(CSG_RAM, 0xab0)
-
-REG32(GPIOB_CTRL, 0xb00)
-REG32(GPIOB_CFG_CMOS18, 0xb04)
-REG32(GPIOB_CFG_CMOS25, 0xb08)
-REG32(GPIOB_CFG_CMOS33, 0xb0c)
-REG32(GPIOB_CFG_HSTL, 0xb14)
-REG32(GPIOB_DRVR_BIAS_CTRL, 0xb18)
-
-REG32(DDRIOB, 0xb40) */
 #define DDRIOB_LENGTH 14
 
 #define CHOMP_SLCR_MMIO_SIZE     0x1000
@@ -394,93 +283,10 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
     boot_mode = qemu_opt_get_number(opts, "mode", 0);
 
     s->regs[R_CHIP_ID] = 0x3900;
-
+    s->regs[R_GPIO_DIR_1] = 0xFFFF; 
+    s->regs[R_GPIO_DIR_2] = 0xFFFF; 
     s->regs[R_GPIO_IN_1] = 0x8000; // FIXED to UART boot mode
-
-    /*
-    s->regs[R_LOCKSTA] = 1;
-    s->regs[R_ARM_PLL_CTRL]   = 0x0001A008;
-    s->regs[R_DDR_PLL_CTRL]   = 0x0001A008;
-    s->regs[R_IO_PLL_CTRL]    = 0x0001A008;
-    s->regs[R_PLL_STATUS]     = 0x0000003F;
-    s->regs[R_ARM_PLL_CFG]    = 0x00014000;
-    s->regs[R_DDR_PLL_CFG]    = 0x00014000;
-    s->regs[R_IO_PLL_CFG]     = 0x00014000;
-
-    s->regs[R_ARM_CLK_CTRL]   = 0x1F000200;
-    s->regs[R_DDR_CLK_CTRL]   = 0x18400003;
-    s->regs[R_DCI_CLK_CTRL]   = 0x01E03201;
-    s->regs[R_APER_CLK_CTRL]  = 0x01FFCCCD;
-    s->regs[R_USB0_CLK_CTRL]  = s->regs[R_USB1_CLK_CTRL]  = 0x00101941;
-    s->regs[R_GEM0_RCLK_CTRL] = s->regs[R_GEM1_RCLK_CTRL] = 0x00000001;
-    s->regs[R_GEM0_CLK_CTRL]  = s->regs[R_GEM1_CLK_CTRL]  = 0x00003C01;
-    s->regs[R_SMC_CLK_CTRL]   = 0x00003C01;
-    s->regs[R_LQSPI_CLK_CTRL] = 0x00002821;
-    s->regs[R_SDIO_CLK_CTRL]  = 0x00001E03;
-    s->regs[R_UART_CLK_CTRL]  = 0x00003F03;
-    s->regs[R_SPI_CLK_CTRL]   = 0x00003F03;
-    s->regs[R_CAN_CLK_CTRL]   = 0x00501903;
-    s->regs[R_DBG_CLK_CTRL]   = 0x00000F03;
-    s->regs[R_PCAP_CLK_CTRL]  = 0x00000F01;
-
-    s->regs[R_FPGA0_CLK_CTRL] = s->regs[R_FPGA1_CLK_CTRL]
-                              = s->regs[R_FPGA2_CLK_CTRL]
-                              = s->regs[R_FPGA3_CLK_CTRL] = 0x00101800;
-    s->regs[R_FPGA0_THR_STA] = s->regs[R_FPGA1_THR_STA]
-                             = s->regs[R_FPGA2_THR_STA]
-                             = s->regs[R_FPGA3_THR_STA] = 0x00010000;
-
-    s->regs[R_BANDGAP_TRIP]   = 0x0000001F;
-    s->regs[R_PLL_PREDIVISOR] = 0x00000001;
-    s->regs[R_CLK_621_TRUE]   = 0x00000001;
-
-    s->regs[R_FPGA_RST_CTRL]  = 0x01F33F0F;
-    s->regs[R_RST_REASON]     = 0x00000040;
-
-    s->regs[R_BOOT_MODE]      = boot_mode;
-
-    for (i = 0; i < 54; i++) {
-        s->regs[R_MIO + i] = 0x00001601;
-    }
-    for (i = 2; i <= 8; i++) {
-        s->regs[R_MIO + i] = 0x00000601;
-    }
-
-    s->regs[R_MIO_MST_TRI0] = s->regs[R_MIO_MST_TRI1] = 0xFFFFFFFF;
-
-    s->regs[R_CPU_RAM + 0] = s->regs[R_CPU_RAM + 1] = s->regs[R_CPU_RAM + 3]
-                           = s->regs[R_CPU_RAM + 4] = s->regs[R_CPU_RAM + 7]
-                           = 0x00010101;
-    s->regs[R_CPU_RAM + 2] = s->regs[R_CPU_RAM + 5] = 0x01010101;
-    s->regs[R_CPU_RAM + 6] = 0x00000001;
-
-    s->regs[R_IOU + 0] = s->regs[R_IOU + 1] = s->regs[R_IOU + 2]
-                       = s->regs[R_IOU + 3] = 0x09090909;
-    s->regs[R_IOU + 4] = s->regs[R_IOU + 5] = 0x00090909;
-    s->regs[R_IOU + 6] = 0x00000909;
-
-    s->regs[R_DMAC_RAM] = 0x00000009;
-
-    s->regs[R_AFI0 + 0] = s->regs[R_AFI0 + 1] = 0x09090909;
-    s->regs[R_AFI1 + 0] = s->regs[R_AFI1 + 1] = 0x09090909;
-    s->regs[R_AFI2 + 0] = s->regs[R_AFI2 + 1] = 0x09090909;
-    s->regs[R_AFI3 + 0] = s->regs[R_AFI3 + 1] = 0x09090909;
-    s->regs[R_AFI0 + 2] = s->regs[R_AFI1 + 2] = s->regs[R_AFI2 + 2]
-                        = s->regs[R_AFI3 + 2] = 0x00000909;
-
-    s->regs[R_OCM + 0] = 0x01010101;
-    s->regs[R_OCM + 1] = s->regs[R_OCM + 2] = 0x09090909;
-
-    s->regs[R_DEVCI_RAM] = 0x00000909;
-    s->regs[R_CSG_RAM]   = 0x00000001;
-
-    s->regs[R_DDRIOB + 0] = s->regs[R_DDRIOB + 1] = s->regs[R_DDRIOB + 2]
-                          = s->regs[R_DDRIOB + 3] = 0x00000e00;
-    s->regs[R_DDRIOB + 4] = s->regs[R_DDRIOB + 5] = s->regs[R_DDRIOB + 6]
-                          = 0x00000e00;
-    s->regs[R_DDRIOB + 12] = 0x00000021;
-    */
-
+    
     chomp_slcr_fdt_config(s);
 }
 
