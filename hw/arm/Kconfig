@@ -301,6 +301,7 @@ config CHOMPTECH
     select XILINX_SPI
     select XILINX_SPIPS
     select ZYNQ_DEVCFG
+    select CHOMP_NFC
 
 config ARM_V7M
     bool

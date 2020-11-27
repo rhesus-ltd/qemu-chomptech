@@ -137,10 +137,9 @@ static void chomp_init(MachineState *machine)
                           qdev_get_clock_out(slcr, "uart0_ref_clk"));
 
     // ---- NAND Controller -----------------------------------------------------------------
-    dev = qdev_new("arm.pl35x");
+    dev = qdev_new("chomp.nfc");
     object_property_add_child(container_get(qdev_get_machine(), "/unattached"),
-                              "pl353", OBJECT(dev));
-    qdev_prop_set_uint8(dev, "x", 3);
+                              "nfc", OBJECT(dev));
     dinfo = drive_get_next(IF_PFLASH);
     att_dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo)
                               : NULL,
