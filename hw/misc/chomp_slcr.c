@@ -1,8 +1,9 @@
 /*
  * Status and system control registers for CHOMPTECH CHOMP Platform
+ * 
+ * Author: Sven Huerlimann
  *
- * Copyright (c) 2011 Michal Simek <monstr@monstr.eu>
- * Copyright (c) 2012 PetaLogix Pty Ltd.
+ * Based on hw/misc/zynq_sclr.c by Michal Simek, PetaLogix Pty Ltd.
  * Based on hw/arm_sysctl.c, written by Paul Brook
  *
  * This program is free software; you can redistribute it and/or
