@@ -27,11 +27,11 @@
 #define CONTROL_RST_RX    0x02
 #define CONTROL_IE        0x10
 
-#define TYPE_CHOMP_UARTLITE "xlnx.xps-uartlite"
-#define CHOMP_UARTLITE(obj) \
-    OBJECT_CHECK(ChompUARTLite, (obj), TYPE_CHOMP_UARTLITE)
+#define TYPE_CHOMP_UART "chomptech,uart"
+#define CHOMP_UART(obj) \
+    OBJECT_CHECK(ChompUART, (obj), TYPE_CHOMP_UART)
 
-typedef struct ChompUARTLite {
+typedef struct ChompUART {
     SysBusDevice parent_obj;
 
     MemoryRegion mmio;
@@ -43,9 +43,9 @@ typedef struct ChompUARTLite {
     unsigned int rx_fifo_len;
 
     uint32_t regs[R_MAX];
-} ChompUARTLite;
+} ChompUART;
 
-static void uart_update_irq(ChompUARTLite *s)
+static void uart_update_irq(ChompUART *s)
 {
     unsigned int irq;
 
@@ -56,7 +56,7 @@ static void uart_update_irq(ChompUARTLite *s)
     qemu_set_irq(s->irq, irq);
 }
 
-static void uart_update_status(ChompUARTLite *s)
+static void uart_update_status(ChompUART *s)
 {
     uint32_t r;
 
@@ -68,15 +68,15 @@ static void uart_update_status(ChompUARTLite *s)
     s->regs[R_STATUS] = r;
 }
 
-static void chomp_uartlite_reset(DeviceState *dev)
+static void chomp_uart_reset(DeviceState *dev)
 {
-    uart_update_status(CHOMP_UARTLITE(dev));
+    uart_update_status(CHOMP_UART(dev));
 }
 
 static uint64_t
 uart_read(void *opaque, hwaddr addr, unsigned int size)
 {
-    ChompUARTLite *s = opaque;
+    ChompUART *s = opaque;
     uint32_t r = 0;
     addr >>= 2;
     switch (addr)
@@ -103,7 +103,7 @@ static void
 uart_write(void *opaque, hwaddr addr,
            uint64_t val64, unsigned int size)
 {
-    ChompUARTLite *s = opaque;
+    ChompUART *s = opaque;
     uint32_t value = val64;
     unsigned char ch = value;
 
@@ -153,14 +153,14 @@ static const MemoryRegionOps uart_ops = {
     }
 };
 
-static Property chomp_uartlite_properties[] = {
-    DEFINE_PROP_CHR("chardev", ChompUARTLite, chr),
+static Property chomp_uart_properties[] = {
+    DEFINE_PROP_CHR("chardev", ChompUART, chr),
     DEFINE_PROP_END_OF_LIST(),
 };
 
 static void uart_rx(void *opaque, const uint8_t *buf, int size)
 {
-    ChompUARTLite *s = opaque;
+    ChompUART *s = opaque;
 
     /* Got a byte.  */
     if (s->rx_fifo_len >= 8) {
@@ -178,7 +178,7 @@ static void uart_rx(void *opaque, const uint8_t *buf, int size)
 
 static int uart_can_rx(void *opaque)
 {
-    ChompUARTLite *s = opaque;
+    ChompUART *s = opaque;
 
     return s->rx_fifo_len < sizeof(s->rx_fifo);
 }
@@ -188,45 +188,45 @@ static void uart_event(void *opaque, QEMUChrEvent event)
 
 }
 
-static void chomp_uartlite_realize(DeviceState *dev, Error **errp)
+static void chomp_uart_realize(DeviceState *dev, Error **errp)
 {
-    ChompUARTLite *s = CHOMP_UARTLITE(dev);
+    ChompUART *s = CHOMP_UART(dev);
 
     qemu_chr_fe_set_handlers(&s->chr, uart_can_rx, uart_rx,
                              uart_event, NULL, s, NULL, true);
 }
 
-static void chomp_uartlite_init(Object *obj)
+static void chomp_uart_init(Object *obj)
 {
-    ChompUARTLite *s = CHOMP_UARTLITE(obj);
+    ChompUART *s = CHOMP_UART(obj);
 
     sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq);
 
     memory_region_init_io(&s->mmio, obj, &uart_ops, s,
-                          "xlnx.xps-uartlite", R_MAX * 4);
+                          "chomp.uart", R_MAX * 4);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
 }
 
-static void chomp_uartlite_class_init(ObjectClass *klass, void *data)
+static void chomp_uart_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->reset = chomp_uartlite_reset;
-    dc->realize = chomp_uartlite_realize;
-    device_class_set_props(dc, chomp_uartlite_properties);
+    dc->reset = chomp_uart_reset;
+    dc->realize = chomp_uart_realize;
+    device_class_set_props(dc, chomp_uart_properties);
 }
 
-static const TypeInfo chomp_uartlite_info = {
-    .name          = TYPE_CHOMP_UARTLITE,
+static const TypeInfo chomp_uart_info = {
+    .name          = TYPE_CHOMP_UART,
     .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(ChompUARTLite),
-    .instance_init = chomp_uartlite_init,
-    .class_init    = chomp_uartlite_class_init,
+    .instance_size = sizeof(ChompUART),
+    .instance_init = chomp_uart_init,
+    .class_init    = chomp_uart_class_init,
 };
 
 static void chomp_uart_register_types(void)
 {
-    type_register_static(&chomp_uartlite_info);
+    type_register_static(&chomp_uart_info);
 }
 
 type_init(chomp_uart_register_types)

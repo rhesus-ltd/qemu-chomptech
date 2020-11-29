@@ -132,9 +132,10 @@ static void chomp_init(MachineState *machine)
     // ...
 
     // ---- UART Controller -----------------------------------------------------------------
-    dev = cadence_uart_create(0x04036000, pic[59 - IRQ_OFFSET], serial_hd(0));
-    qdev_connect_clock_in(dev, "refclk",
-                          qdev_get_clock_out(slcr, "uart0_ref_clk"));
+    dev = qdev_new("chomptech,uart");
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04036000);
+    //qdev_connect_clock_in(dev, "clk", chomp_machine->clk);
 
     // ---- NAND Controller -----------------------------------------------------------------
     dev = qdev_new("chomp.nfc");
