@@ -7,7 +7,16 @@
 #include "chardev/char-fe.h"
 #include "hw/registerfields.h"
 
-#define DUART(x)
+#ifndef CHOMP_UART_ERR_DEBUG
+#define CHOMP_UART_ERR_DEBUG 1
+#endif
+
+#define DB_PRINT(...) do { \
+        if (CHOMP_UART_ERR_DEBUG) { \
+            fprintf(stderr,  ": %s: ", __func__); \
+            fprintf(stderr, ## __VA_ARGS__); \
+        } \
+    } while (0)
 
 REG32(UART_CFG1,        0x000)
 REG32(UART_CFG2,        0x004)
@@ -87,6 +96,7 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
     ChompUART *s = opaque;
     uint32_t r = 0;
     addr >>= 2;
+
     switch (addr)
     {
         case R_UART_CFG1:
@@ -102,9 +112,11 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
         default:
             if (addr < ARRAY_SIZE(s->regs))
                 r = s->regs[addr];
-            DUART(qemu_log("%s addr=%x v=%x\n", __func__, addr, r));
+            DB_PRINT("%s addr=%x v=%x\n", __func__, addr, r);
             break;
     }
+
+    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, r);
     return r;
 }
 
@@ -128,13 +140,15 @@ uart_write(void *opaque, hwaddr addr,
         case R_UART_BUF_TRSHLD:
 
         default:
-            DUART(printf("%s addr=%x v=%x\n", __func__, addr, value));
+            DB_PRINT("%s addr=%x v=%x\n", __func__, addr, value);
             if (addr < ARRAY_SIZE(s->regs))
                 s->regs[addr] = value;
             break;
     }
    // uart_update_status(s);
    // uart_update_irq(s);
+   
+   DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, value);
 }
 
 static const MemoryRegionOps uart_ops = {
