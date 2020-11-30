@@ -58,6 +58,7 @@ REG32(DACS_HCLK, 0x010)
 REG32(IMG_SENSOR_CFG, 0x014)
 
 REG32(TIMER1_CFG, 0x018)
+REG32(TIMER2_CFG, 0x01c)
 
 REG32(PWM0_CTRL, 0x02c)
 REG32(PWM1_CTRL, 0x030)
@@ -80,7 +81,7 @@ REG32(ANALOG_CTRL2, 0x064)
 REG32(ANALOG_CTRL3, 0x068)
 REG32(ANALOG_CTRL4, 0x06c)
 
-REG32(SHARE_PIN_CRTL, 0x074)
+REG32(SHARE_PIN_CTRL, 0x074)
 
 REG32(GPIO_DIR_1, 0x07C)
 REG32(GPIO_OUT_1, 0x080)
@@ -283,10 +284,10 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
 
     boot_mode = qemu_opt_get_number(opts, "mode", 0);
 
-    s->regs[R_CHIP_ID] = 0x3900;
-    s->regs[R_GPIO_DIR_1] = 0xFFFF; 
-    s->regs[R_GPIO_DIR_2] = 0xFFFF; 
-    s->regs[R_GPIO_IN_1] = 0x8000; // FIXED to UART boot mode
+    s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
+    s->regs[R_GPIO_DIR_1] = 0x0000; 
+    s->regs[R_GPIO_DIR_2] = 0x0000; 
+    s->regs[R_GPIO_IN_1] = 0x1000; // FIXED to UART boot mode
     
     chomp_slcr_fdt_config(s);
 }
@@ -312,65 +313,20 @@ static void chomp_slcr_reset_exit(Object *obj)
 static bool chomp_slcr_check_offset(hwaddr offset, bool rnw)
 {
     switch (offset) {
-        /*
-    case R_LOCK:
-    case R_UNLOCK:
-    case R_DDR_CAL_START:
-    case R_DDR_REF_START:
+    case R_GPIO_OUT_1:
+    case R_GPIO_OUT_2:
+    case R_GPIO_DIR_1:
+    case R_GPIO_DIR_2:
         return !rnw; // Write only 
-    */
     case R_CHIP_ID:
-    /*
-    case R_LOCKSTA:
-    case R_FPGA0_THR_STA:
-    case R_FPGA1_THR_STA:
-    case R_FPGA2_THR_STA:
-    case R_FPGA3_THR_STA:
-    case R_BOOT_MODE:
-    case R_PSS_IDCODE:
-    case R_DDR_CMD_STA:
-    case R_DDR_DFI_STATUS:
-    case R_PLL_STATUS:
-    */
+    case R_GPIO_IN_1:
+    case R_GPIO_IN_2:
         return rnw;/* read only */
-    /*
-    case R_ARM_PLL_CTRL ... R_IO_PLL_CTRL:
-    case R_ARM_PLL_CFG ... R_IO_PLL_CFG:
-    case R_ARM_CLK_CTRL ... R_TOPSW_CLK_CTRL:
-    case R_FPGA0_CLK_CTRL ... R_FPGA0_THR_CNT:
-    case R_FPGA1_CLK_CTRL ... R_FPGA1_THR_CNT:
-    case R_FPGA2_CLK_CTRL ... R_FPGA2_THR_CNT:
-    case R_FPGA3_CLK_CTRL ... R_FPGA3_THR_CNT:
-    case R_BANDGAP_TRIP:
-    case R_PLL_PREDIVISOR:
-    case R_CLK_621_TRUE:
-    case R_PSS_RST_CTRL ... R_A9_CPU_RST_CTRL:
-    case R_RS_AWDT_CTRL:
-    case R_RST_REASON:
-    case R_REBOOT_STATUS:
-    case R_APU_CTRL:
-    case R_WDT_CLK_SEL:
-    case R_TZ_DMA_NS ... R_TZ_DMA_PERIPH_NS:
-    case R_DDR_URGENT:
-    case R_DDR_URGENT_SEL:
-    case R_MIO ... R_MIO + MIO_LENGTH - 1:
-    case R_MIO_LOOPBACK ... R_MIO_MST_TRI1:
-    case R_SD0_WP_CD_SEL:
-    case R_SD1_WP_CD_SEL:
-    case R_LVL_SHFTR_EN:
-    case R_OCM_CFG:
-    case R_CPU_RAM:
-    case R_IOU:
-    case R_DMAC_RAM:
-    case R_AFI0 ... R_AFI3 + AFI_LENGTH - 1:
-    case R_OCM:
-    case R_DEVCI_RAM:
-    case R_CSG_RAM:
-    case R_GPIOB_CTRL ... R_GPIOB_CFG_CMOS33:
-    case R_GPIOB_CFG_HSTL:
-    case R_GPIOB_DRVR_BIAS_CTRL:
-    case R_DDRIOB ... R_DDRIOB + DDRIOB_LENGTH - 1:
-    */
+    case R_CLOCK_RST_EN:
+    case R_SHARE_PIN_CTRL:
+    case R_CLOCK_DIV1:
+    case R_CLOCK_DIV2:
+    case R_TIMER1_CFG:
         return true;
     default:
         return false;
@@ -389,6 +345,55 @@ static uint64_t chomp_slcr_read(void *opaque, hwaddr offset,
                       " addr %" HWADDR_PRIx "\n", offset * 4);
     }
 
+    switch (offset) {
+    case R_CHIP_ID:
+        DB_PRINT("Read R_CHIP_ID\n");
+        break;
+    case R_CLOCK_DIV1:
+        DB_PRINT("Read R_CLOCK_DIV1\n");
+        break;
+    case R_CLOCK_DIV2:
+        DB_PRINT("Read R_CLOCK_DIV2\n");
+        break;
+    case R_CLOCK_RST_EN:
+        DB_PRINT("Read R_CHIP_I\n");
+        break; 
+    case R_TIMER1_CFG:
+        DB_PRINT("Read R_TIMER1_CFG\n");
+        ret &= 0x02000000;
+        break;   
+    case R_TIMER2_CFG:
+        DB_PRINT("Read R_TIMER2_CFG\n");
+        break;  
+    case R_SHARE_PIN_CTRL:
+        DB_PRINT("Read R_SHARE_PIN_CTRL\n");
+        break; 
+    case R_GPIO_DIR_1:
+        DB_PRINT("Read R_GPIO_DIR_1\n");
+        break;
+    case R_GPIO_DIR_2:
+        DB_PRINT("Read R_GPIO_DIR_2\n");
+        break;
+    case R_GPIO_IN_1:
+        DB_PRINT("Read R_GPIO_IN_1\n");
+        break;
+    case R_GPIO_IN_2:
+        DB_PRINT("Read R_GPIO_IN_2\n");
+        break; 
+    case R_GPIO_OUT_1:
+        DB_PRINT("Read R_GPIO_OUT_1\n");
+        break;
+    case R_GPIO_OUT_2:
+        DB_PRINT("Read R_GPIO_OUT_2\n");
+        break;
+    case R_GPIO_PULL_UD_1:
+        DB_PRINT("Read R_GPIO_PULL_UD_1\n");
+        break;
+    case R_GPIO_PULL_UD_2:
+        DB_PRINT("Read R_GPIO_PULL_UD_2\n");
+        break;
+    }
+
     DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", offset * 4, ret);
     return ret;
 }
@@ -400,8 +405,6 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     offset /= 4;
     int i;
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
-
     if (!chomp_slcr_check_offset(offset, false)) {
         qemu_log_mask(LOG_GUEST_ERROR, "chomp_slcr: Invalid write access to "
                       "addr %" HWADDR_PRIx "\n", offset * 4);
@@ -409,32 +412,51 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     }
 
     switch (offset) {
-        /*
-    //case R_SCL:
-    //    s->regs[R_SCL] = val & 0x1;
-    //    return;
-    case R_LOCK:
-        if ((val & 0xFFFF) == CHOMPTECH_LOCK_KEY) {
-            DB_PRINT("CHOMPTECH LOCK 0xF8000000 + 0x%x <= 0x%x\n", (int)offset,
-                (unsigned)val & 0xFFFF);
-            s->regs[R_LOCKSTA] = 1;
-        } else {
-            DB_PRINT("WRONG CHOMPTECH LOCK KEY 0xF8000000 + 0x%x <= 0x%x\n",
-                (int)offset, (unsigned)val & 0xFFFF);
-        }
-        return;
-    case R_UNLOCK:
-        if ((val & 0xFFFF) == CHOMPTECH_UNLOCK_KEY) {
-            DB_PRINT("CHOMPTECH UNLOCK 0xF8000000 + 0x%x <= 0x%x\n", (int)offset,
-                (unsigned)val & 0xFFFF);
-            s->regs[R_LOCKSTA] = 0;
-        } else {
-            DB_PRINT("WRONG CHOMPTECH UNLOCK KEY 0xF8000000 + 0x%x <= 0x%x\n",
-                (int)offset, (unsigned)val & 0xFFFF);
-        }
-        */
-        return;
+    case R_CLOCK_DIV1:
+        DB_PRINT("Write R_CLOCK_DIV1\n");
+        break;
+    case R_CLOCK_DIV2:
+        DB_PRINT("Write R_CLOCK_DIV2\n");
+        break;
+    case R_CLOCK_RST_EN:
+        DB_PRINT("Write R_CLOCK_RST_EN\n");
+        break; 
+    case R_TIMER1_CFG:
+        DB_PRINT("Write R_TIMER1_CFG\n");
+        break; 
+    case R_TIMER2_CFG:
+        DB_PRINT("Write R_TIMER2_CFG\n");
+        break;  
+    case R_SHARE_PIN_CTRL:
+        DB_PRINT("Write R_SHARE_PIN_CTRL\n");
+        break; 
+    case R_GPIO_DIR_1:
+        DB_PRINT("Write R_GPIO_DIR_1\n");
+        break;
+    case R_GPIO_DIR_2:
+        DB_PRINT("Write R_GPIO_DIR_2\n");
+        break;
+    case R_GPIO_IN_1:
+        DB_PRINT("Write R_GPIO_IN_1\n");
+        break;
+    case R_GPIO_IN_2:
+        DB_PRINT("Write R_GPIO_IN_2\n");
+        break;
+    case R_GPIO_OUT_1:
+        DB_PRINT("Write R_GPIO_OUT_1\n");
+        break;
+    case R_GPIO_OUT_2:
+        DB_PRINT("Write R_GPIO_OUT_2\n");
+        break;
+    case R_GPIO_PULL_UD_1:
+        DB_PRINT("Write R_GPIO_PULL_UD_1\n");
+        break;
+    case R_GPIO_PULL_UD_2:
+        DB_PRINT("Write R_GPIO_PULL_UD_2\n");
+        break;
     }
+
+    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
 
     /*
     if (s->regs[R_LOCKSTA]) {
@@ -510,7 +532,7 @@ static void chomp_slcr_init(Object *obj)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
 
-    memory_region_init_io(&s->iomem, obj, &slcr_ops, s, "slcr",
+    memory_region_init_io(&s->iomem, obj, &slcr_ops, s, "chomp.slcr",
                           CHOMP_SLCR_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
 
