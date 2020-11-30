@@ -29,6 +29,7 @@
 #include "qemu/module.h"
 #include "hw/registerfields.h"
 #include "hw/qdev-clock.h"
+#include "hw/ptimer.h"
 
 #ifdef CONFIG_FDT
 #include "qemu/config-file.h"
@@ -58,6 +59,17 @@ REG32(DACS_HCLK, 0x010)
 REG32(IMG_SENSOR_CFG, 0x014)
 
 REG32(TIMER1_CFG, 0x018)
+REG32(TIMER2_CFG, 0x01c)
+
+#define TIMER_STATUS_BIT           (1 << 29)  //0: Hasn't generated an interrupt
+                                              //1: Has generated an interrupt.
+                                              //Note: cleared after being read.
+#define TIMER_CLEAR_BIT            (1 << 28)  //1: To clear timer pulse.
+#define TIMER_LOAD_BIT             (1 << 27)  //1: To load new count value.
+#define TIMER_ENABLE_BIT           (1 << 26)  //0: To disable the Timer
+                                              //1: To enable the Timer
+
+#define TIMER_VALUE_MASK            0x3FFFFFF
 
 REG32(PWM0_CTRL, 0x02c)
 REG32(PWM1_CTRL, 0x030)
@@ -80,7 +92,7 @@ REG32(ANALOG_CTRL2, 0x064)
 REG32(ANALOG_CTRL3, 0x068)
 REG32(ANALOG_CTRL4, 0x06c)
 
-REG32(SHARE_PIN_CRTL, 0x074)
+REG32(SHARE_PIN_CTRL, 0x074)
 
 REG32(GPIO_DIR_1, 0x07C)
 REG32(GPIO_OUT_1, 0x080)
@@ -120,41 +132,20 @@ typedef struct ChompSLCRState {
     MemoryRegion iomem;
     qemu_irq cpu_resets[CHOMP_SLCR_NUM_CPUS];
 
-    /* PS to PL reset signals.  */
-    qemu_irq fpga_resets[17];
+    qemu_irq timer_irq;
 
     uint32_t regs[CHOMP_SLCR_NUM_REGS];
 
     Clock *clk;
     Clock *uart0_ref_clk;
+    
+    uint32_t      freq_hz;
+    ptimer_state *ptimer;
 } ChompSLCRState;
 
 static void chomp_slcr_fdt_config(ChompSLCRState *s)
 {
-#ifdef CONFIG_FDT
-    QemuOpts *machine_opts;
-    const char *dtb_filename;
-    int fdt_size;
-    void *fdt = NULL;
-
-    /* identify dtb file name from qemu opts */
-    machine_opts = qemu_opts_find(qemu_find_opts("machine"), 0);
-    if (machine_opts) {
-        dtb_filename = qemu_opt_get(machine_opts, "dtb");
-    } else {
-        dtb_filename = NULL;
-    }
-
-    if (dtb_filename) {
-        fdt = load_device_tree(dtb_filename, &fdt_size);
-    }
-
-    if (!fdt) {
-        return;
-    }
-#endif
-
-    return;
+   return;
 }
 
 /*
@@ -283,11 +274,12 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
 
     boot_mode = qemu_opt_get_number(opts, "mode", 0);
 
-    s->regs[R_CHIP_ID] = 0x3900;
-    s->regs[R_GPIO_DIR_1] = 0xFFFF; 
-    s->regs[R_GPIO_DIR_2] = 0xFFFF; 
-    s->regs[R_GPIO_IN_1] = 0x8000; // FIXED to UART boot mode
-    
+    s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
+    s->regs[R_GPIO_DIR_1] = 0x0000; 
+    s->regs[R_GPIO_DIR_2] = 0x0000; 
+    s->regs[R_GPIO_IN_1] = 0x1000; // FIXED to UART boot mode
+    s->regs[R_TIMER1_CFG] = 0x02000000; 
+
     chomp_slcr_fdt_config(s);
 }
 
@@ -312,65 +304,21 @@ static void chomp_slcr_reset_exit(Object *obj)
 static bool chomp_slcr_check_offset(hwaddr offset, bool rnw)
 {
     switch (offset) {
-        /*
-    case R_LOCK:
-    case R_UNLOCK:
-    case R_DDR_CAL_START:
-    case R_DDR_REF_START:
+    case R_GPIO_OUT_1:
+    case R_GPIO_OUT_2:
+    case R_GPIO_DIR_1:
+    case R_GPIO_DIR_2:
+    case R_INT_STA:
         return !rnw; // Write only 
-    */
     case R_CHIP_ID:
-    /*
-    case R_LOCKSTA:
-    case R_FPGA0_THR_STA:
-    case R_FPGA1_THR_STA:
-    case R_FPGA2_THR_STA:
-    case R_FPGA3_THR_STA:
-    case R_BOOT_MODE:
-    case R_PSS_IDCODE:
-    case R_DDR_CMD_STA:
-    case R_DDR_DFI_STATUS:
-    case R_PLL_STATUS:
-    */
+    case R_GPIO_IN_1:
+    case R_GPIO_IN_2:
         return rnw;/* read only */
-    /*
-    case R_ARM_PLL_CTRL ... R_IO_PLL_CTRL:
-    case R_ARM_PLL_CFG ... R_IO_PLL_CFG:
-    case R_ARM_CLK_CTRL ... R_TOPSW_CLK_CTRL:
-    case R_FPGA0_CLK_CTRL ... R_FPGA0_THR_CNT:
-    case R_FPGA1_CLK_CTRL ... R_FPGA1_THR_CNT:
-    case R_FPGA2_CLK_CTRL ... R_FPGA2_THR_CNT:
-    case R_FPGA3_CLK_CTRL ... R_FPGA3_THR_CNT:
-    case R_BANDGAP_TRIP:
-    case R_PLL_PREDIVISOR:
-    case R_CLK_621_TRUE:
-    case R_PSS_RST_CTRL ... R_A9_CPU_RST_CTRL:
-    case R_RS_AWDT_CTRL:
-    case R_RST_REASON:
-    case R_REBOOT_STATUS:
-    case R_APU_CTRL:
-    case R_WDT_CLK_SEL:
-    case R_TZ_DMA_NS ... R_TZ_DMA_PERIPH_NS:
-    case R_DDR_URGENT:
-    case R_DDR_URGENT_SEL:
-    case R_MIO ... R_MIO + MIO_LENGTH - 1:
-    case R_MIO_LOOPBACK ... R_MIO_MST_TRI1:
-    case R_SD0_WP_CD_SEL:
-    case R_SD1_WP_CD_SEL:
-    case R_LVL_SHFTR_EN:
-    case R_OCM_CFG:
-    case R_CPU_RAM:
-    case R_IOU:
-    case R_DMAC_RAM:
-    case R_AFI0 ... R_AFI3 + AFI_LENGTH - 1:
-    case R_OCM:
-    case R_DEVCI_RAM:
-    case R_CSG_RAM:
-    case R_GPIOB_CTRL ... R_GPIOB_CFG_CMOS33:
-    case R_GPIOB_CFG_HSTL:
-    case R_GPIOB_DRVR_BIAS_CTRL:
-    case R_DDRIOB ... R_DDRIOB + DDRIOB_LENGTH - 1:
-    */
+    case R_CLOCK_RST_EN:
+    case R_SHARE_PIN_CTRL:
+    case R_CLOCK_DIV1:
+    case R_CLOCK_DIV2:
+    case R_TIMER1_CFG:
         return true;
     default:
         return false;
@@ -383,13 +331,69 @@ static uint64_t chomp_slcr_read(void *opaque, hwaddr offset,
     ChompSLCRState *s = opaque;
     offset /= 4;
     uint32_t ret = s->regs[offset];
+    uint32_t count = 0;
 
     if (!chomp_slcr_check_offset(offset, true)) {
         qemu_log_mask(LOG_GUEST_ERROR, "chomp_slcr: Invalid read access to "
                       " addr %" HWADDR_PRIx "\n", offset * 4);
     }
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", offset * 4, ret);
+    switch (offset) {
+    case R_CHIP_ID:
+        DB_PRINT("Read R_CHIP_ID\n");
+        break;
+    case R_CLOCK_DIV1:
+        DB_PRINT("Read R_CLOCK_DIV1\n");
+        break;
+    case R_CLOCK_DIV2:
+        DB_PRINT("Read R_CLOCK_DIV2\n");
+        break;
+    case R_CLOCK_RST_EN:
+        DB_PRINT("Read R_CHIP_I\n");
+        break; 
+    case R_TIMER1_CFG:
+       // DB_PRINT("Read R_TIMER1_CFG\n");
+        //ret |= 0x20000000;
+        count = ptimer_get_count(s->ptimer);
+        s->regs[R_TIMER1_CFG] &= ~0x3FFFFFF;
+        s->regs[R_TIMER1_CFG] |= (count & 0x3FFFFFF);
+        ret = s->regs[R_TIMER1_CFG];
+        break;   
+    case R_TIMER2_CFG:
+        DB_PRINT("Read R_TIMER2_CFG\n");
+        break;  
+    case R_SHARE_PIN_CTRL:
+        DB_PRINT("Read R_SHARE_PIN_CTRL\n");
+        break; 
+    case R_GPIO_DIR_1:
+        DB_PRINT("Read R_GPIO_DIR_1\n");
+        break;
+    case R_GPIO_DIR_2:
+        DB_PRINT("Read R_GPIO_DIR_2\n");
+        break;
+    case R_GPIO_IN_1:
+        DB_PRINT("Read R_GPIO_IN_1\n");
+        break;
+    case R_GPIO_IN_2:
+        DB_PRINT("Read R_GPIO_IN_2\n");
+        break; 
+    case R_GPIO_OUT_1:
+        DB_PRINT("Read R_GPIO_OUT_1\n");
+        break;
+    case R_GPIO_OUT_2:
+        DB_PRINT("Read R_GPIO_OUT_2\n");
+        break;
+    case R_GPIO_PULL_UD_1:
+        DB_PRINT("Read R_GPIO_PULL_UD_1\n");
+        break;
+    case R_GPIO_PULL_UD_2:
+        DB_PRINT("Read R_GPIO_PULL_UD_2\n");
+        break;
+    case R_INT_STA:
+        break;
+    }
+
+    //DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", offset * 4, ret);
     return ret;
 }
 
@@ -400,8 +404,6 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     offset /= 4;
     int i;
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
-
     if (!chomp_slcr_check_offset(offset, false)) {
         qemu_log_mask(LOG_GUEST_ERROR, "chomp_slcr: Invalid write access to "
                       "addr %" HWADDR_PRIx "\n", offset * 4);
@@ -409,32 +411,81 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     }
 
     switch (offset) {
-        /*
-    //case R_SCL:
-    //    s->regs[R_SCL] = val & 0x1;
-    //    return;
-    case R_LOCK:
-        if ((val & 0xFFFF) == CHOMPTECH_LOCK_KEY) {
-            DB_PRINT("CHOMPTECH LOCK 0xF8000000 + 0x%x <= 0x%x\n", (int)offset,
-                (unsigned)val & 0xFFFF);
-            s->regs[R_LOCKSTA] = 1;
-        } else {
-            DB_PRINT("WRONG CHOMPTECH LOCK KEY 0xF8000000 + 0x%x <= 0x%x\n",
-                (int)offset, (unsigned)val & 0xFFFF);
+    case R_CLOCK_DIV1:
+        DB_PRINT("Write R_CLOCK_DIV1\n");
+        break;
+    case R_CLOCK_DIV2:
+        DB_PRINT("Write R_CLOCK_DIV2\n");
+        break;
+    case R_CLOCK_RST_EN:
+        DB_PRINT("Write R_CLOCK_RST_EN\n");
+        break; 
+    case R_TIMER1_CFG:
+        ptimer_transaction_begin(s->ptimer);
+        if (val & TIMER_CLEAR_BIT) {
+            DB_PRINT("Clear timer pulse\n");
+            s->regs[R_TIMER1_CFG] &= ~TIMER_STATUS_BIT;
         }
-        return;
-    case R_UNLOCK:
-        if ((val & 0xFFFF) == CHOMPTECH_UNLOCK_KEY) {
-            DB_PRINT("CHOMPTECH UNLOCK 0xF8000000 + 0x%x <= 0x%x\n", (int)offset,
-                (unsigned)val & 0xFFFF);
-            s->regs[R_LOCKSTA] = 0;
-        } else {
-            DB_PRINT("WRONG CHOMPTECH UNLOCK KEY 0xF8000000 + 0x%x <= 0x%x\n",
-                (int)offset, (unsigned)val & 0xFFFF);
+        if (val & TIMER_LOAD_BIT) {
+            DB_PRINT("Load new timer value\n");
+            // load new timer value
+            if (s->regs[R_TIMER1_CFG] & TIMER_ENABLE_BIT) {
+                ptimer_stop(s->ptimer);
+                s->regs[R_TIMER1_CFG] &= ~TIMER_ENABLE_BIT;
+            }
+            uint32_t tvalue = val & 0x3FFFFFF;
+            ptimer_set_limit(s->ptimer, tvalue + 1, 1);
         }
-        */
-        return;
+        if (val & TIMER_ENABLE_BIT) {
+            DB_PRINT("Enable timer\n");
+            // start timer
+            ptimer_run(s->ptimer, 1);
+            s->regs[R_TIMER1_CFG] &= ~TIMER_STATUS_BIT;
+            s->regs[R_TIMER1_CFG] |= TIMER_ENABLE_BIT;
+        } else {
+            DB_PRINT("Disable timer\n");
+            // stop timer
+            ptimer_stop(s->ptimer);
+            s->regs[R_TIMER1_CFG] &= ~TIMER_ENABLE_BIT; 
+        }
+        ptimer_transaction_commit(s->ptimer);
+
+        // Flag is cleared on read
+        s->regs[R_TIMER1_CFG] &= ~0x20000000;
+        break; 
+    case R_TIMER2_CFG:
+        DB_PRINT("Write R_TIMER2_CFG\n");
+        break;  
+    case R_SHARE_PIN_CTRL:
+        DB_PRINT("Write R_SHARE_PIN_CTRL\n");
+        break; 
+    case R_GPIO_DIR_1:
+        DB_PRINT("Write R_GPIO_DIR_1\n");
+        break;
+    case R_GPIO_DIR_2:
+        DB_PRINT("Write R_GPIO_DIR_2\n");
+        break;
+    case R_GPIO_IN_1:
+        DB_PRINT("Write R_GPIO_IN_1\n");
+        break;
+    case R_GPIO_IN_2:
+        DB_PRINT("Write R_GPIO_IN_2\n");
+        break;
+    case R_GPIO_OUT_1:
+        DB_PRINT("Write R_GPIO_OUT_1\n");
+        break;
+    case R_GPIO_OUT_2:
+        DB_PRINT("Write R_GPIO_OUT_2\n");
+        break;
+    case R_GPIO_PULL_UD_1:
+        DB_PRINT("Write R_GPIO_PULL_UD_1\n");
+        break;
+    case R_GPIO_PULL_UD_2:
+        DB_PRINT("Write R_GPIO_PULL_UD_2\n");
+        break;
     }
+
+    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
 
     /*
     if (s->regs[R_LOCKSTA]) {
@@ -481,12 +532,42 @@ static const MemoryRegionOps slcr_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+static int timer_irq_state(ChompSLCRState *t)
+{
+    bool irq = t->regs[R_TIMER1_CFG] & TIMER_STATUS_BIT;
+    return irq;
+}
+
+static void timer_hit(void *opaque)
+{
+    ChompSLCRState *s = opaque;
+    const uint64_t tvalue = s->regs[R_TIMER1_CFG] & TIMER_VALUE_MASK;
+
+    DB_PRINT("Timer hit\n");
+    s->regs[R_TIMER1_CFG] |= TIMER_STATUS_BIT;
+    qemu_set_irq(s->timer_irq, timer_irq_state(s));
+}
+
 static void chomp_slcr_realize(DeviceState *dev, Error **errp)
 {
     int i;
     CPUState *env = first_cpu;
+    ChompSLCRState *s = CHOMP_SLCR(dev);
+
+    s->freq_hz = 26000;
+
+    if (s->freq_hz == 0) {
+        error_setg(errp, "\"clock-frequency\" property must be provided.");
+        return;
+    }
+
+    s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
+    ptimer_transaction_begin(s->ptimer);
+    ptimer_set_freq(s->ptimer, s->freq_hz);
+    ptimer_transaction_commit(s->ptimer);
 
     /* FIXME: Make this not suck */
+    /*
     for (i  = 0; i < fdt_generic_num_cpus && i < CHOMP_SLCR_NUM_CPUS; ++i) {
         Object *cpu_obj = OBJECT(env);
         if (!cpu_obj->parent) {
@@ -498,6 +579,7 @@ static void chomp_slcr_realize(DeviceState *dev, Error **errp)
                               qdev_get_gpio_in_named(DEVICE(env), "reset", 0));
         env = CPU_NEXT(env);
     }
+    */
 }
 
 static const ClockPortInitArray chomp_slcr_clocks = {
@@ -510,7 +592,7 @@ static void chomp_slcr_init(Object *obj)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
 
-    memory_region_init_io(&s->iomem, obj, &slcr_ops, s, "slcr",
+    memory_region_init_io(&s->iomem, obj, &slcr_ops, s, "chomp.slcr",
                           CHOMP_SLCR_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
 
