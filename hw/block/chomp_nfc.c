@@ -250,7 +250,7 @@ static void chomp_nfc_init_nand(SysBusDevice *dev, CHOMP_NFCItf *itf)
     /* d Must be a NAND flash */
     assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));
 
-    memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "chomp_nfc.nand",
+    memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "chomp.nfc_nand",
                           1 << 24);
     sysbus_init_mmio(dev, &itf->mm);
 }
@@ -261,7 +261,7 @@ static void chomp_nfc_realize(DeviceState *dev, Error **errp)
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
     int itfn = 0;
 
-    memory_region_init_io(&s->mmio, OBJECT(dev), &chomp_nfc_ops, s, "chomp_nfc_io",
+    memory_region_init_io(&s->mmio, OBJECT(dev), &chomp_nfc_ops, s, "chomp.nfc_io",
                           0x1000);
     sysbus_init_mmio(sbd, &s->mmio);
     if (s->x != 1) { /* everything cept PL351 has at least one SRAM */

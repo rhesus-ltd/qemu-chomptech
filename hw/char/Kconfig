@@ -55,3 +55,6 @@ config RENESAS_SCI
 
 config AVR_USART
     bool
+
+config CHOMP_UART
+    bool
