@@ -133,6 +133,7 @@ static void chomp_init(MachineState *machine)
 
     // ---- UART Controller -----------------------------------------------------------------
     dev = qdev_new("chomptech,uart");
+    qdev_prop_set_chr(dev, "chardev", serial_hd(0));
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04036000);
     //qdev_connect_clock_in(dev, "clk", chomp_machine->clk);

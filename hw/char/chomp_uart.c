@@ -11,6 +11,8 @@
 #define CHOMP_UART_ERR_DEBUG 1
 #endif
 
+extern AddressSpace address_space_memory;
+
 #define DB_PRINT(...) do { \
         if (CHOMP_UART_ERR_DEBUG) { \
             fprintf(stderr,  ": %s: ", __func__); \
@@ -23,20 +25,59 @@ REG32(UART_CFG2,        0x004)
 REG32(UART_DATA_CFG,    0x008)
 REG32(UART_BUF_TRSHLD,  0x00C)
 
-#define BAUD_RATE_DIV       0 
 
-#define UTD_SEL_INVERSELY   (1 << 16)
-#define URD_SEL_INVERSELY   (1 << 17)
-#define UART_INTERFACE_EN   (1 << 21)
-#define BAUD_RATE_ADJ_EN    (1 << 22)
-#define RX_TIMEOUT_EN       (1 << 23)
-#define PARITY_SEL_EVEN     (1 << 25)
-#define PARITY_EN           (1 << 26)
-#define ENDIAN_SEL_BIG      (1 << 27)      
-#define TX_STA_CLR          (1 << 28)
-#define RX_STA_CLR          (1 << 29)
-#define RX_ADR_CLR          (1 << 30)
-#define TX_ADR_CLR          (1 << 31)
+//REG_UART_CONFIG_1
+#define TX_ADR_CLR                      (1UL << 31)
+#define RX_ADR_CLR                      (1 << 30)
+#define RX_STA_CLR                      (1 << 29)
+#define TX_STA_CLR                      (1 << 28)
+#define ENDIAN_SEL_BIG                  (1 << 27)
+#define PARITY_EN                       (1 << 26)
+#define PARITY_SEL_EVEN                 (1 << 25)
+#define RX_TIMEOUT_EN                   (1 << 23)
+#define BAUD_RATE_ADJ_EN                (1 << 22)
+#define UART_INTERFACE_EN               (1 << 21)
+#define URD_SEL_INVERSELY               (1 << 17)
+#define UTD_SEL_INVERSELY               (1 << 16)
+#define BAUD_RATE_DIV                   (0)         //[15:0]
+
+
+//REG_UART_CONFIG_2
+#define TX_TH_INT_STA                   (1 << 31)
+#define RX_TH_INT_STA                   (1 << 30)
+#define TX_TH_INT_EN                    (1 << 29)
+#define RX_TH_INT_EN                    (1 << 28)
+#define TX_END_INT_EN                   (1 << 27)
+#define RX_BUF_FULL_INT_EN              (1 << 26)
+#define TX_BUF_EMP_INT_EN               (1 << 24)
+#define RX_ERROR_INT_EN                 (1 << 23)
+#define TIMEOUT_INT_EN                  (1 << 22)
+#define RX_READY_INT_EN                 (1 << 21)
+#define TX_END                          (1 << 19)
+#define RX_TIMEROUT_STA                 (1 << 18)
+#define RX_READY                        (1 << 17)   //?????
+#define TX_BYT_CNT_VLD                  (1 << 16)
+#define TX_BYT_CNT                      (4)         //[15:4]
+#define RX_ERROR                        (1 << 3)
+#define RX_TIMEROUT                     (1 << 2)
+#define RX_BUF_FULL                     (1 << 1)
+#define TX_FIFO_EMPTY                   (1 << 0)
+
+
+//REG_UART_DATA_CONFIG
+#define BYT_LEFT                        (23)        //[24:23]
+#define TX_ADDR                         (18)        //[22:18]
+#define RX_ADDR                         (13)        //[17:13]
+#define TX_BYT_SUM                      (0)         //[12:0]
+
+
+//REG_UART_TXRX_BUF_THRESHOLD
+#define TX_TH_CNT                       (17)        //[21:17]
+#define RX_TH_CNT                       (12)        //[16:12]
+#define TX_TH_CLR                       (1 << 11)
+#define TX_TH_CFG                       (6)         //[10:6]
+#define RX_TH_CLR                       (1 << 5)
+#define RX_TH_CFG                       (0)         //[4:0]
 
 #define CHOMP_UART_MMIO_SIZE     0x1000
 #define CHOMP_UART_NUM_REGS      (CHOMP_UART_MMIO_SIZE / 4)
@@ -49,6 +90,7 @@ typedef struct ChompUART {
     SysBusDevice parent_obj;
 
     MemoryRegion mmio;
+    AddressSpace *as;
     CharBackend chr;
     qemu_irq irq;
 
@@ -108,7 +150,7 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
         case R_UART_CFG2:
         case R_UART_DATA_CFG:
         case R_UART_BUF_TRSHLD:
-
+            break;
         default:
             if (addr < ARRAY_SIZE(s->regs))
                 r = s->regs[addr];
@@ -116,7 +158,7 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
             break;
     }
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, r);
+   // DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, r);
     return r;
 }
 
@@ -126,19 +168,23 @@ uart_write(void *opaque, hwaddr addr,
 {
     ChompUART *s = opaque;
     uint32_t value = val64;
-    unsigned char ch = value;
+    unsigned char ch =  address_space_ldq_le(s->as, /* FIXME: */ 0x0802fa80, MEMTXATTRS_UNSPECIFIED, NULL);;
 
     addr >>= 2;
     switch (addr)
     {
         case R_UART_CFG1:
+            break;
         case R_UART_CFG2:
-        case R_UART_DATA_CFG:
+            fprintf(stderr, "%c", ch);
+            fflush(stderr);
+            //DB_PRINT("%c", ch);
             qemu_chr_fe_write_all(&s->chr, &ch, 1);
             s->regs[addr] = value;
             break;
+        case R_UART_DATA_CFG:
         case R_UART_BUF_TRSHLD:
-
+            break;
         default:
             DB_PRINT("%s addr=%x v=%x\n", __func__, addr, value);
             if (addr < ARRAY_SIZE(s->regs))
@@ -148,7 +194,7 @@ uart_write(void *opaque, hwaddr addr,
    // uart_update_status(s);
    // uart_update_irq(s);
    
-   DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, value);
+   //DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, value);
 }
 
 static const MemoryRegionOps uart_ops = {
@@ -213,6 +259,8 @@ static void chomp_uart_init(Object *obj)
     memory_region_init_io(&s->mmio, obj, &uart_ops, s,
                           "chomp.uart", CHOMP_UART_NUM_REGS * 4);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
+    
+    s->as = &address_space_memory;
 }
 
 static void chomp_uart_class_init(ObjectClass *klass, void *data)

@@ -30,6 +30,15 @@
 #include "hw/registerfields.h"
 #include "hw/qdev-clock.h"
 #include "hw/ptimer.h"
+#include "hw/irq.h"
+#include "hw/qdev-properties.h"
+#include "migration/vmstate.h"
+#include "qemu/bitops.h"
+#include "qemu/log.h"
+#include "qemu/module.h"
+#include "qapi/error.h"
+
+extern AddressSpace address_space_memory;
 
 #ifdef CONFIG_FDT
 #include "qemu/config-file.h"
@@ -120,19 +129,14 @@ REG32(ANALOG, 0x098)
 REG32(GPIO_PULL_UD_1, 0x09C)
 REG32(GPIO_PULL_UD_2, 0x0A0)
 
+REG32(MAGIC, 0x200)
+
 #define DDRIOB_LENGTH 14
 
 #define CHOMP_SLCR_MMIO_SIZE     0x1000
 #define CHOMP_SLCR_NUM_REGS      (CHOMP_SLCR_MMIO_SIZE / 4)
 
-#define CHOMP_SLCR_NUM_CPUS 2
-
-#define FPGA_RST_VALID_BITS 0x01f33F0F
-/* The action of the FPGA_RST_CTRL register on the reset pins
- * should be inverted as the resets are active low.
- */
-#define FPGA_RST_INVERT_BITS 0x0000000F
-#define A9_CPU_RST_CTRL_RST_SHIFT 0
+#define CHOMP_SLCR_NUM_CPUS 1
 
 #define TYPE_CHOMP_SLCR "chomptech,chomp_slcr"
 #define CHOMP_SLCR(obj) OBJECT_CHECK(ChompSLCRState, (obj), TYPE_CHOMP_SLCR)
@@ -141,6 +145,8 @@ typedef struct ChompSLCRState {
     SysBusDevice parent_obj;
 
     MemoryRegion iomem;
+    MemoryRegion *dma_mr;
+    AddressSpace *as;
     qemu_irq cpu_resets[CHOMP_SLCR_NUM_CPUS];
 
     qemu_irq timer_irq;
@@ -155,6 +161,8 @@ typedef struct ChompSLCRState {
     
     uint32_t      freq_hz;
     ptimer_state *ptimer;
+
+    uint32_t magic;
 } ChompSLCRState;
 
 
@@ -206,7 +214,7 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
     s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
     s->regs[R_GPIO_DIR_1] = 0x0000; 
     s->regs[R_GPIO_DIR_2] = 0x0000; 
-    s->regs[R_GPIO_IN_1] = 0x1000; // FIXED to UART boot mode
+    s->regs[R_GPIO_IN_1] = 0x3000; // FIXED to UART boot mode
     s->regs[R_TIMER1_CFG] = 0x02000000; 
 }
 
@@ -243,11 +251,13 @@ static bool chomp_slcr_check_offset(hwaddr offset, bool rnw)
     case R_GPIO_IN_1:
     case R_GPIO_IN_2:
         return rnw;/* read only */
+    case R_DACS_HCLK:
     case R_CLOCK_RST_EN:
     case R_SHARE_PIN_CTRL:
     case R_CLOCK_DIV1:
     case R_CLOCK_DIV2:
     case R_TIMER1_CFG:
+    case R_MAGIC:
         return true;
     default:
         return false;
@@ -319,6 +329,13 @@ static uint64_t chomp_slcr_read(void *opaque, hwaddr offset,
         DB_PRINT("Read R_GPIO_PULL_UD_2\n");
         break;
     case R_INT_STA:
+
+    // hack test "pysical" ram.
+    case R_DACS_HCLK:
+        break;
+    case R_MAGIC:
+        ret = address_space_ldq_le(s->as, s->magic, MEMTXATTRS_UNSPECIFIED, NULL);
+        DB_PRINT("Phys is: %08x\n", ret);
         break;
     }
 
@@ -411,6 +428,9 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     case R_GPIO_PULL_UD_2:
         DB_PRINT("Write R_GPIO_PULL_UD_2\n");
         break;
+    case R_MAGIC:
+        s->magic = val;
+        break;
     }
 
     DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
@@ -473,6 +493,10 @@ static void chomp_slcr_init(Object *obj)
 
     qdev_init_gpio_out(DEVICE(obj), s->cpu_resets, CHOMP_SLCR_NUM_CPUS);
     qdev_init_clocks(DEVICE(obj), chomp_slcr_clocks);
+
+    //s->dma_mr = get_system_memory();
+    //address_space_init(&s->as, s->dma_mr, "tmp");
+    s->as = &address_space_memory;
 }
 
 static const VMStateDescription vmstate_chomp_slcr = {
