@@ -52,6 +52,17 @@
 REG32(CHIP_ID, 0x000)
 REG32(CLOCK_DIV1, 0x004)
 REG32(CLOCK_DIV2, 0x008)
+
+#define CLK_CLK168M_DIV                 (17)        //[20:17]
+#define CLK_CLK168M_BP                  (1 << 16)
+#define CLK_CPU2X_EN                    (1 << 15)
+#define CLK_ASIC_EN                     (1 << 14)
+#define CLK_STANDBY_EN                  (1 << 13)
+#define CLK_PLL_EN                      (1 << 12)
+#define CLK_ASIC_DIV                    (6)         //[8:6]
+#define CLK_PLL_SEL 
+
+
 REG32(CLOCK_RST_EN, 0x00c)
 
 REG32(DACS_HCLK, 0x010)
