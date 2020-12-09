@@ -13,6 +13,7 @@
 #include "hw/ssi/ssi.h"
 #include "hw/usb/chipidea.h"
 #include "qemu/error-report.h"
+#include "hw/misc/unimp.h"
 #include "hw/sd/sdhci.h"
 #include "hw/char/cadence_uart.h"
 #include "hw/net/cadence_gem.h"
@@ -133,6 +134,7 @@ static void chomp_init(MachineState *machine)
 
     // ---- UART Controller -----------------------------------------------------------------
     dev = qdev_new("chomptech,uart");
+    qdev_prop_set_chr(dev, "chardev", serial_hd(0));
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04036000);
     //qdev_connect_clock_in(dev, "clk", chomp_machine->clk);
@@ -172,6 +174,9 @@ static void chomp_init(MachineState *machine)
     chomp_binfo.board_setup_addr = BOARD_SETUP_ADDR;
     chomp_binfo.write_board_setup = chomp_write_board_setup;
 
+    create_unimplemented_device("L2", 0x04010000, 0x1000);
+    create_unimplemented_device("USB", 0x04070000, 0x1000);
+    
     arm_load_kernel(ARM_CPU(first_cpu), machine, &chomp_binfo);
 }
 

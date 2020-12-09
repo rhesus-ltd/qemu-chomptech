@@ -301,6 +301,7 @@ config CHOMPTECH
     select ZYNQ_DEVCFG
     select CHOMP_NFC
     select CHOMP_UART
+    select UNIMP
 
 config ARM_V7M
     bool

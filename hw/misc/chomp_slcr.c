@@ -30,6 +30,15 @@
 #include "hw/registerfields.h"
 #include "hw/qdev-clock.h"
 #include "hw/ptimer.h"
+#include "hw/irq.h"
+#include "hw/qdev-properties.h"
+#include "migration/vmstate.h"
+#include "qemu/bitops.h"
+#include "qemu/log.h"
+#include "qemu/module.h"
+#include "qapi/error.h"
+
+extern AddressSpace address_space_memory;
 
 #ifdef CONFIG_FDT
 #include "qemu/config-file.h"
@@ -52,6 +61,17 @@
 REG32(CHIP_ID, 0x000)
 REG32(CLOCK_DIV1, 0x004)
 REG32(CLOCK_DIV2, 0x008)
+
+#define CLK_CLK168M_DIV                 (17)        //[20:17]
+#define CLK_CLK168M_BP                  (1 << 16)
+#define CLK_CPU2X_EN                    (1 << 15)
+#define CLK_ASIC_EN                     (1 << 14)
+#define CLK_STANDBY_EN                  (1 << 13)
+#define CLK_PLL_EN                      (1 << 12)
+#define CLK_ASIC_DIV                    (6)         //[8:6]
+#define CLK_PLL_SEL 
+
+
 REG32(CLOCK_RST_EN, 0x00c)
 
 REG32(DACS_HCLK, 0x010)
@@ -109,19 +129,14 @@ REG32(ANALOG, 0x098)
 REG32(GPIO_PULL_UD_1, 0x09C)
 REG32(GPIO_PULL_UD_2, 0x0A0)
 
+REG32(MAGIC, 0x200)
+
 #define DDRIOB_LENGTH 14
 
 #define CHOMP_SLCR_MMIO_SIZE     0x1000
 #define CHOMP_SLCR_NUM_REGS      (CHOMP_SLCR_MMIO_SIZE / 4)
 
-#define CHOMP_SLCR_NUM_CPUS 2
-
-#define FPGA_RST_VALID_BITS 0x01f33F0F
-/* The action of the FPGA_RST_CTRL register on the reset pins
- * should be inverted as the resets are active low.
- */
-#define FPGA_RST_INVERT_BITS 0x0000000F
-#define A9_CPU_RST_CTRL_RST_SHIFT 0
+#define CHOMP_SLCR_NUM_CPUS 1
 
 #define TYPE_CHOMP_SLCR "chomptech,chomp_slcr"
 #define CHOMP_SLCR(obj) OBJECT_CHECK(ChompSLCRState, (obj), TYPE_CHOMP_SLCR)
@@ -130,6 +145,8 @@ typedef struct ChompSLCRState {
     SysBusDevice parent_obj;
 
     MemoryRegion iomem;
+    MemoryRegion *dma_mr;
+    AddressSpace *as;
     qemu_irq cpu_resets[CHOMP_SLCR_NUM_CPUS];
 
     qemu_irq timer_irq;
@@ -137,89 +154,20 @@ typedef struct ChompSLCRState {
     uint32_t regs[CHOMP_SLCR_NUM_REGS];
 
     Clock *clk;
-    Clock *uart0_ref_clk;
+
+    Clock *pll_clk;
+    Clock *dac_clk;
+    Clock *adc_clk;
     
     uint32_t      freq_hz;
     ptimer_state *ptimer;
+
+    uint32_t magic;
 } ChompSLCRState;
 
-static void chomp_slcr_fdt_config(ChompSLCRState *s)
-{
-   return;
-}
-
-/*
- * return the output frequency of ARM/DDR/IO pll
- * using input frequency and PLL_CTRL register
- */
-static uint64_t chomp_slcr_compute_pll(uint64_t input, uint32_t ctrl_reg)
-{
-    /*
-    uint32_t mult = ((ctrl_reg & R_xxx_PLL_CTRL_PLL_FPDIV_MASK) >>
-            R_xxx_PLL_CTRL_PLL_FPDIV_SHIFT);
-    */
-    /* first, check if pll is bypassed */
-    /*
-    if (ctrl_reg & R_xxx_PLL_CTRL_PLL_BYPASS_FORCE_MASK) {
-        return input;
-    }
-
-    if (ctrl_reg & (R_xxx_PLL_CTRL_PLL_RESET_MASK |
-                    R_xxx_PLL_CTRL_PLL_PWRDWN_MASK)) {
-        return 0;
-    }
-    */
-    /* frequency multiplier -> period division */
-    return 0; // input / mult;
-}
-
-/*
- * return the output period of a clock given:
- * + the periods in an array corresponding to input mux selector
- * + the register xxx_CLK_CTRL value
- * + enable bit index in ctrl register
- *
- * This function makes the assumption that the ctrl_reg value is organized as
- * follows:
- * + bits[13:8]  clock frequency divisor
- * + bits[5:4]   clock mux selector (index in array)
- * + bits[index] clock enable
- */
-static uint64_t chomp_slcr_compute_clock(const uint64_t periods[],
-                                        uint32_t ctrl_reg,
-                                        unsigned index)
-{
-    uint32_t srcsel = extract32(ctrl_reg, 4, 2); /* bits [5:4] */
-    uint32_t divisor = extract32(ctrl_reg, 8, 6); /* bits [13:8] */
-
-    /* first, check if clock is disabled */
-    if (((ctrl_reg >> index) & 1u) == 0) {
-        return 0;
-    }
-
-    /*
-     * according to the Chomp technical ref. manual UG585 v1.12.2 in
-     * Clocks chapter, section 25.10.1 page 705:
-     * "The 6-bit divider provides a divide range of 1 to 63"
-     * We follow here what is implemented in linux kernel and consider
-     * the 0 value as a bypass (no division).
-     */
-    /* frequency divisor -> period multiplication */
-    return periods[srcsel] * (divisor ? divisor : 1u);
-}
-
-/*
- * macro helper around chomp_slcr_compute_clock to avoid repeating
- * the register name.
- */
-#define CHOMP_COMPUTE_CLK(state, plls, reg, enable_field) \
-    chomp_slcr_compute_clock((plls), (state)->regs[reg], \
-                            reg ## _ ## enable_field ## _SHIFT)
 
 /**
  * Compute and set the ouputs clocks periods.
- * But do not propagate them further. Connected clocks
- * will not receive any updates (See chomp_slcr_compute_clocks())
  */
 static void chomp_slcr_compute_clocks(ChompSLCRState *s)
 {
@@ -230,20 +178,8 @@ static void chomp_slcr_compute_clocks(ChompSLCRState *s)
         clk = 0;
     }
 
-    // TODO:
-    /*
-    uint64_t io_pll = chomp_slcr_compute_pll(ps_clk, s->regs[R_IO_PLL_CTRL]);
-    uint64_t arm_pll = chomp_slcr_compute_pll(ps_clk, s->regs[R_ARM_PLL_CTRL]);
-    uint64_t ddr_pll = chomp_slcr_compute_pll(ps_clk, s->regs[R_DDR_PLL_CTRL]);
-
-    uint64_t uart_mux[4] = {io_pll, io_pll, arm_pll, ddr_pll};
-
-    // compute uartX reference clocks 
-    clock_set(s->uart0_ref_clk,
-              CHOMP_COMPUTE_CLK(s, uart_mux, R_UART_CLK_CTRL, CLKACT0));
-    clock_set(s->uart1_ref_clk,
-              CHOMP_COMPUTE_CLK(s, uart_mux, R_UART_CLK_CTRL, CLKACT1));
-    */
+    // PLL clock just follows
+    //clock_set_source(s->pll_clk, s->clk);
 }
 
 /**
@@ -253,7 +189,9 @@ static void chomp_slcr_compute_clocks(ChompSLCRState *s)
  */
 static void chomp_slcr_propagate_clocks(ChompSLCRState *s)
 {
-    clock_propagate(s->uart0_ref_clk);
+    clock_propagate(s->pll_clk);
+    clock_propagate(s->dac_clk);
+    clock_propagate(s->adc_clk);
 }
 
 static void chomp_slcr_clk_callback(void *opaque)
@@ -266,27 +204,25 @@ static void chomp_slcr_clk_callback(void *opaque)
 static void chomp_slcr_reset_init(Object *obj, ResetType type)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
-    int i;
     QemuOpts *opts = qemu_find_opts_singleton("boot-opts");
     int boot_mode;
 
-    DB_PRINT("RESET\n");
+    DB_PRINT("RESET Init\n");
 
     boot_mode = qemu_opt_get_number(opts, "mode", 0);
 
     s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
     s->regs[R_GPIO_DIR_1] = 0x0000; 
     s->regs[R_GPIO_DIR_2] = 0x0000; 
-    s->regs[R_GPIO_IN_1] = 0x1000; // FIXED to UART boot mode
+    s->regs[R_GPIO_IN_1] = 0x3000; // FIXED to UART boot mode
     s->regs[R_TIMER1_CFG] = 0x02000000; 
-
-    chomp_slcr_fdt_config(s);
 }
 
 static void chomp_slcr_reset_hold(Object *obj)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
 
+    DB_PRINT("RESET Hold\n");
     /* will disable all output clocks */
     chomp_slcr_compute_clocks(s);
     chomp_slcr_propagate_clocks(s);
@@ -296,6 +232,7 @@ static void chomp_slcr_reset_exit(Object *obj)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
 
+    DB_PRINT("RESET Exit\n");
     /* will compute output clocks according to ps_clk and registers */
     chomp_slcr_compute_clocks(s);
     chomp_slcr_propagate_clocks(s);
@@ -314,11 +251,13 @@ static bool chomp_slcr_check_offset(hwaddr offset, bool rnw)
     case R_GPIO_IN_1:
     case R_GPIO_IN_2:
         return rnw;/* read only */
+    case R_DACS_HCLK:
     case R_CLOCK_RST_EN:
     case R_SHARE_PIN_CTRL:
     case R_CLOCK_DIV1:
     case R_CLOCK_DIV2:
     case R_TIMER1_CFG:
+    case R_MAGIC:
         return true;
     default:
         return false;
@@ -390,6 +329,13 @@ static uint64_t chomp_slcr_read(void *opaque, hwaddr offset,
         DB_PRINT("Read R_GPIO_PULL_UD_2\n");
         break;
     case R_INT_STA:
+
+    // hack test "pysical" ram.
+    case R_DACS_HCLK:
+        break;
+    case R_MAGIC:
+        ret = address_space_ldq_le(s->as, s->magic, MEMTXATTRS_UNSPECIFIED, NULL);
+        DB_PRINT("Phys is: %08x\n", ret);
         break;
     }
 
@@ -402,7 +348,6 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
 {
     ChompSLCRState *s = (ChompSLCRState *)opaque;
     offset /= 4;
-    int i;
 
     if (!chomp_slcr_check_offset(offset, false)) {
         qemu_log_mask(LOG_GUEST_ERROR, "chomp_slcr: Invalid write access to "
@@ -483,47 +428,14 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     case R_GPIO_PULL_UD_2:
         DB_PRINT("Write R_GPIO_PULL_UD_2\n");
         break;
+    case R_MAGIC:
+        s->magic = val;
+        break;
     }
 
     DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx64 "\n", offset * 4, val);
 
-    /*
-    if (s->regs[R_LOCKSTA]) {
-        qemu_log_mask(LOG_GUEST_ERROR,
-                      "SCLR registers are locked. Unlock them first\n");
-        return;
-    }
-    */
     s->regs[offset] = val;
-
-    /*
-    switch (offset) {
-    case R_PSS_RST_CTRL:
-        if (FIELD_EX32(val, PSS_RST_CTRL, SOFT_RST)) {
-            qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
-        }
-        break;
-    case R_A9_CPU_RST_CTRL:
-        for (i = 0; i < CHOMP_SLCR_NUM_CPUS; ++i) {
-            bool rst = extract32(val, A9_CPU_RST_CTRL_RST_SHIFT + i, 1);
-
-            qemu_set_irq(s->cpu_resets[i], rst);
-            DB_PRINT("%sresetting cpu %d\n", rst ? "" : "un-", i);
-        }
-        break;
-    case R_FPGA_RST_CTRL:
-        s->regs[offset] &= FPGA_RST_VALID_BITS;
-        chomp_slcr_update_fpga_resets(s);
-        break;
-    case R_IO_PLL_CTRL:
-    case R_ARM_PLL_CTRL:
-    case R_DDR_PLL_CTRL:
-    case R_UART_CLK_CTRL:
-        chomp_slcr_compute_clocks(s);
-        chomp_slcr_propagate_clocks(s);
-        break;
-    }
-    */
 }
 
 static const MemoryRegionOps slcr_ops = {
@@ -541,17 +453,13 @@ static int timer_irq_state(ChompSLCRState *t)
 static void timer_hit(void *opaque)
 {
     ChompSLCRState *s = opaque;
-    const uint64_t tvalue = s->regs[R_TIMER1_CFG] & TIMER_VALUE_MASK;
-
-    DB_PRINT("Timer hit\n");
+//    const uint64_t tvalue = s->regs[R_TIMER1_CFG] & TIMER_VALUE_MASK;
     s->regs[R_TIMER1_CFG] |= TIMER_STATUS_BIT;
     qemu_set_irq(s->timer_irq, timer_irq_state(s));
 }
 
 static void chomp_slcr_realize(DeviceState *dev, Error **errp)
 {
-    int i;
-    CPUState *env = first_cpu;
     ChompSLCRState *s = CHOMP_SLCR(dev);
 
     s->freq_hz = 26000;
@@ -565,26 +473,13 @@ static void chomp_slcr_realize(DeviceState *dev, Error **errp)
     ptimer_transaction_begin(s->ptimer);
     ptimer_set_freq(s->ptimer, s->freq_hz);
     ptimer_transaction_commit(s->ptimer);
-
-    /* FIXME: Make this not suck */
-    /*
-    for (i  = 0; i < fdt_generic_num_cpus && i < CHOMP_SLCR_NUM_CPUS; ++i) {
-        Object *cpu_obj = OBJECT(env);
-        if (!cpu_obj->parent) {
-            char *cpu_child_name = g_strdup_printf("cpu-%d\n", i);
-            object_property_add_child(qdev_get_machine(), cpu_child_name,
-                                      cpu_obj);
-        }
-        qdev_connect_gpio_out(dev, i,
-                              qdev_get_gpio_in_named(DEVICE(env), "reset", 0));
-        env = CPU_NEXT(env);
-    }
-    */
 }
 
 static const ClockPortInitArray chomp_slcr_clocks = {
     QDEV_CLOCK_IN(ChompSLCRState, clk, chomp_slcr_clk_callback),
-    QDEV_CLOCK_OUT(ChompSLCRState, uart0_ref_clk),
+    QDEV_CLOCK_OUT(ChompSLCRState, pll_clk),
+    QDEV_CLOCK_OUT(ChompSLCRState, dac_clk),
+    QDEV_CLOCK_OUT(ChompSLCRState, adc_clk),
     QDEV_CLOCK_END
 };
 
@@ -598,6 +493,10 @@ static void chomp_slcr_init(Object *obj)
 
     qdev_init_gpio_out(DEVICE(obj), s->cpu_resets, CHOMP_SLCR_NUM_CPUS);
     qdev_init_clocks(DEVICE(obj), chomp_slcr_clocks);
+
+    //s->dma_mr = get_system_memory();
+    //address_space_init(&s->as, s->dma_mr, "tmp");
+    s->as = &address_space_memory;
 }
 
 static const VMStateDescription vmstate_chomp_slcr = {
@@ -607,6 +506,9 @@ static const VMStateDescription vmstate_chomp_slcr = {
     .fields = (VMStateField[]) {
         VMSTATE_UINT32_ARRAY(regs, ChompSLCRState, CHOMP_SLCR_NUM_REGS),
         VMSTATE_CLOCK_V(clk, ChompSLCRState, 3),
+        VMSTATE_CLOCK_V(pll_clk, ChompSLCRState, 3),
+        VMSTATE_CLOCK_V(dac_clk, ChompSLCRState, 3),
+        VMSTATE_CLOCK_V(adc_clk, ChompSLCRState, 3),
         VMSTATE_END_OF_LIST()
     }
 };
