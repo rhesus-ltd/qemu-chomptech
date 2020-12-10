@@ -81,6 +81,9 @@ static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
     uint32_t r = 0;
     int rdy;
 
+    DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
+                 addr * 4);
+
     addr >>= 2;
     switch (addr) {
     case 0x0:
@@ -116,9 +119,9 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
     /* FIXME: implement */
     switch(addr) {
         case 0x56:
-            DB_PRINT("Strange read\n");
+            DB_PRINT("Strange write\n");
         default:
-            DB_PRINT("Some other read\n");
+            DB_PRINT("Some other write\n");
     }
     DB_PRINT("Unimplemented SMC write access reg=" TARGET_FMT_plx "\n",
                  addr * 4);

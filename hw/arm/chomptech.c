@@ -139,6 +139,17 @@ static void chomp_init(MachineState *machine)
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04036000);
     //qdev_connect_clock_in(dev, "clk", chomp_machine->clk);
 
+    // ---- SPI Controller ------------------------------------------------------------------
+    dev = qdev_new("chomptech,spi");
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x040a0000);
+
+    // ---- L2 Controller ------------------------------------------------------------------
+    dev = qdev_new("chomptech,l2");
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04010000);
+
+
     // ---- NAND Controller -----------------------------------------------------------------
     dev = qdev_new("chomp.nfc");
     object_property_add_child(container_get(qdev_get_machine(), "/unattached"),
@@ -174,9 +185,10 @@ static void chomp_init(MachineState *machine)
     chomp_binfo.board_setup_addr = BOARD_SETUP_ADDR;
     chomp_binfo.write_board_setup = chomp_write_board_setup;
 
-    create_unimplemented_device("L2", 0x04010000, 0x1000);
+   // create_unimplemented_device("L2", 0x04010000, 0x1000);
     create_unimplemented_device("USB", 0x04070000, 0x1000);
-    
+   // create_unimplemented_device("SPI", 0x040a0000, 0x1000);
+        
     arm_load_kernel(ARM_CPU(first_cpu), machine, &chomp_binfo);
 }
 

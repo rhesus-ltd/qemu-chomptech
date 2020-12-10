@@ -213,7 +213,7 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
 
     s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
     s->regs[R_GPIO_DIR_1] = 0x0000; 
-    s->regs[R_GPIO_DIR_2] = 0x0000; 
+    s->regs[R_GPIO_DIR_2] = 0x1000; // 0x2000 -> USBBoot
     s->regs[R_GPIO_IN_1] = 0x3000; // FIXED to UART boot mode
     s->regs[R_TIMER1_CFG] = 0x02000000; 
 }
@@ -258,6 +258,7 @@ static bool chomp_slcr_check_offset(hwaddr offset, bool rnw)
     case R_CLOCK_DIV2:
     case R_TIMER1_CFG:
     case R_MAGIC:
+    case R_BOOTUP_MODE:
         return true;
     default:
         return false;
@@ -328,8 +329,11 @@ static uint64_t chomp_slcr_read(void *opaque, hwaddr offset,
     case R_GPIO_PULL_UD_2:
         DB_PRINT("Read R_GPIO_PULL_UD_2\n");
         break;
+    case R_BOOTUP_MODE:
+        DB_PRINT("Bootmode setting\n");
     case R_INT_STA:
-
+        s->regs[R_INT_STA] = 0x40;
+        ret |= 0x40;
     // hack test "pysical" ram.
     case R_DACS_HCLK:
         break;
@@ -398,6 +402,9 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
         // Flag is cleared on read
         s->regs[R_TIMER1_CFG] &= ~0x20000000;
         break; 
+    case R_INT_STA:
+        DB_PRINT("Write R_INT_STA\n");
+        break;
     case R_TIMER2_CFG:
         DB_PRINT("Write R_TIMER2_CFG\n");
         break;  
@@ -428,6 +435,8 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
     case R_GPIO_PULL_UD_2:
         DB_PRINT("Write R_GPIO_PULL_UD_2\n");
         break;
+    case R_BOOTUP_MODE:
+        DB_PRINT("Bootmode setting %08x\n", val);
     case R_MAGIC:
         s->magic = val;
         break;

@@ -43,6 +43,12 @@ config PCA9552
 config PL310
     bool
 
+config CHOMP_SPI
+    bool
+
+config CHOMP_L2
+    bool
+
 config INTEGRATOR_DEBUG
     bool
 
