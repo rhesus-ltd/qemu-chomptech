@@ -88,14 +88,13 @@ static void chomp_init(MachineState *machine)
 {
     ChompMachineState *chomp_machine = CHOMP_MACHINE(machine);
     ARMCPU *cpu;
-    SysBusDevice *busdev;
     MemoryRegion *address_space_mem = get_system_memory();
     MemoryRegion *ocm_ram = g_new(MemoryRegion, 1);
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     DeviceState *dev, *slcr;
     DriveInfo *dinfo;
     DeviceState *att_dev;
-    qemu_irq pic[64];
+    //qemu_irq pic[64];
 
     cpu = ARM_CPU(object_new(machine->cpu_type));
 
@@ -105,16 +104,15 @@ static void chomp_init(MachineState *machine)
 //    object_property_set_int(OBJECT(cpu), "reset-cbar", 0x00000000, &error_fatal);
     qdev_realize(DEVICE(cpu), NULL, &error_fatal);
 
-    /* 256k of on-chip memory */
-    memory_region_init_rom(ocm_ram, NULL, "chomp.rom", 32 * KiB,
+    // 64k of mask ROM
+    memory_region_init_rom(ocm_ram, NULL, "chomp.rom", 64 * KiB,
                            &error_fatal);
     memory_region_add_subregion(address_space_mem, 0x00000000, ocm_ram);
 
+    // 192k of OCM
     memory_region_init_ram(ram, NULL, "chomp.ocmem", 192 * KiB,
                            &error_fatal);
     memory_region_add_subregion(address_space_mem, 0x08000000, ram);
-
-
 
     /* Create slcr, keep a pointer to connect clocks */
     slcr = qdev_new("chomptech,chomp_slcr");
@@ -139,6 +137,17 @@ static void chomp_init(MachineState *machine)
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04036000);
     //qdev_connect_clock_in(dev, "clk", chomp_machine->clk);
 
+    // ---- SPI Controller ------------------------------------------------------------------
+    dev = qdev_new("chomptech,spi");
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x040a0000);
+
+    // ---- L2 Controller ------------------------------------------------------------------
+    dev = qdev_new("chomptech,l2");
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04010000);
+
+
     // ---- NAND Controller -----------------------------------------------------------------
     dev = qdev_new("chomp.nfc");
     object_property_add_child(container_get(qdev_get_machine(), "/unattached"),
@@ -147,25 +156,10 @@ static void chomp_init(MachineState *machine)
     att_dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo)
                               : NULL,
                         NAND_MFR_STMICRO, 0xaa);
-    object_property_set_link(OBJECT(dev), "dev1", OBJECT(att_dev), &error_abort);
+    object_property_set_link(OBJECT(dev), "dev0", OBJECT(att_dev), &error_abort);
 
-    busdev = SYS_BUS_DEVICE(dev);
-    sysbus_realize(busdev, &error_fatal);
-    sysbus_mmio_map(busdev, 0, 0x0404a000);
-    sysbus_mmio_map(busdev, 2, 0xe1000000);
-
-    // ---- DMA Controller -----------------------------------------------------------------
-    dev = qdev_new("pl330");
-    qdev_prop_set_uint8(dev, "num_chnls",  8);
-    qdev_prop_set_uint8(dev, "num_periph_req",  4);
-    qdev_prop_set_uint8(dev, "num_events",  16);
-
-    qdev_prop_set_uint8(dev, "data_width",  64);
-    qdev_prop_set_uint8(dev, "wr_cap",  8);
-    qdev_prop_set_uint8(dev, "wr_q_dep",  16);
-    qdev_prop_set_uint8(dev, "rd_cap",  8);
-    qdev_prop_set_uint8(dev, "rd_q_dep",  16);
-    qdev_prop_set_uint16(dev, "data_buffer_dep",  256);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x0404a000);
 
     chomp_binfo.ram_size = machine->ram_size;
     chomp_binfo.nb_cpus = 1;
@@ -174,9 +168,8 @@ static void chomp_init(MachineState *machine)
     chomp_binfo.board_setup_addr = BOARD_SETUP_ADDR;
     chomp_binfo.write_board_setup = chomp_write_board_setup;
 
-    create_unimplemented_device("L2", 0x04010000, 0x1000);
     create_unimplemented_device("USB", 0x04070000, 0x1000);
-    
+        
     arm_load_kernel(ARM_CPU(first_cpu), machine, &chomp_binfo);
 }
 
