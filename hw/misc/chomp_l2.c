@@ -73,13 +73,13 @@ static void chomp_l2_write(void *opaque, hwaddr addr,
         break;
     }
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, value);
+   // DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, value);
 }
 
 
 static void chomp_l2_realize(DeviceState *dev, Error **errp)
 {
-    ChompL2State *s = CHOMP_L2(dev);
+ //   ChompL2State *s = CHOMP_L2(dev);
 }
 
 static const VMStateDescription vmstate_chomp_l2 = {

@@ -24,6 +24,18 @@
 #define CHOMP_SPI_MMIO_SIZE     0x1000
 #define CHOMP_SPI_NUM_REGS      (CHOMP_SPI_MMIO_SIZE / 4)
 
+#ifndef CHOMP_SPI_ERR_DEBUG
+#define CHOMP_SPI_ERR_DEBUG 1
+#endif
+
+#define DB_PRINT(...) do { \
+        if (CHOMP_SPI_ERR_DEBUG) { \
+            fprintf(stderr,  ": %s: ", __func__); \
+            fprintf(stderr, ## __VA_ARGS__); \
+        } \
+    } while (0)
+
+
 typedef struct ChompSPIState {
     SysBusDevice parent_obj;
 
@@ -41,17 +53,36 @@ typedef struct ChompSPIState {
 static uint64_t chomp_spi_read(void *opaque, hwaddr addr,
                                unsigned size)
 {
-    return 0;
+//    ChompSPIState *s = CHOMP_SPI(opaque);
+    addr >>= 2;
+
+    uint32_t ret = 0;
+
+    switch(addr) {
+        case 1: 
+            ret |= 0x100; // FIX ME BIG TIME
+    }
+
+    DB_PRINT("addr: %08" HWADDR_PRIx "\n", addr * 4);
+
+    return ret;
 }
 
 static void chomp_spi_write(void *opaque, hwaddr addr,
                             uint64_t value, unsigned size)
 {
+    //ChompSPIState *s = CHOMP_SPI(opaque);
+    addr >>= 2;
+
+    switch(addr) {
+    }
+ 
+    //DB_PRINT("addr: %08" HWADDR_PRIx ", Value: %08x\n", addr * 4, value);
 }
 
 static void chomp_spi_realize(DeviceState *dev, Error **errp)
 {
-    ChompSPIState *s = CHOMP_SPI(dev);
+  //  ChompSPIState *s = CHOMP_SPI(dev);
 }
 
 static const MemoryRegionOps chomp_spi_ops = {

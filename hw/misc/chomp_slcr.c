@@ -171,12 +171,12 @@ typedef struct ChompSLCRState {
  */
 static void chomp_slcr_compute_clocks(ChompSLCRState *s)
 {
-    uint64_t clk = clock_get(s->clk);
+  //  uint64_t clk = clock_get(s->clk);
 
     /* consider outputs clocks are disabled while in reset */
-    if (device_is_in_reset(DEVICE(s))) {
-        clk = 0;
-    }
+//    if (device_is_in_reset(DEVICE(s))) {
+//        clk = 0;
+//    }
 
     // PLL clock just follows
     //clock_set_source(s->pll_clk, s->clk);
@@ -204,17 +204,17 @@ static void chomp_slcr_clk_callback(void *opaque)
 static void chomp_slcr_reset_init(Object *obj, ResetType type)
 {
     ChompSLCRState *s = CHOMP_SLCR(obj);
-    QemuOpts *opts = qemu_find_opts_singleton("boot-opts");
-    int boot_mode;
+  //  QemuOpts *opts = qemu_find_opts_singleton("boot-opts");
+  //  int boot_mode;
 
     DB_PRINT("RESET Init\n");
 
-    boot_mode = qemu_opt_get_number(opts, "mode", 0);
+//    boot_mode = qemu_opt_get_number(opts, "mode", 0);
 
     s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
     s->regs[R_GPIO_DIR_1] = 0x0000; 
-    s->regs[R_GPIO_DIR_2] = 0x1000; // 0x2000 -> USBBoot
-    s->regs[R_GPIO_IN_1] = 0x3000; // FIXED to UART boot mode
+    s->regs[R_GPIO_DIR_2] = 0x1000; 
+    s->regs[R_GPIO_IN_1] = 0x3200; // 0x2000 -> USBBoot
     s->regs[R_TIMER1_CFG] = 0x02000000; 
 }
 
@@ -436,7 +436,8 @@ static void chomp_slcr_write(void *opaque, hwaddr offset,
         DB_PRINT("Write R_GPIO_PULL_UD_2\n");
         break;
     case R_BOOTUP_MODE:
-        DB_PRINT("Bootmode setting %08x\n", val);
+        //DB_PRINT("Bootmode setting %08x\n", val);
+        break;
     case R_MAGIC:
         s->magic = val;
         break;

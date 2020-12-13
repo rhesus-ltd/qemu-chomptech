@@ -291,7 +291,7 @@ uart_write(void *opaque, hwaddr addr,
 
 
         case R_UART_DATA_CFG:
-            bytes_left = (value >> BYT_LEFT) & 0x3;
+            //bytes_left = (value >> BYT_LEFT) & 0x3;
 //            txaddr = (value >> TX_ADDR) & 0x1F;
 //            rxaddr = (value >> RX_ADDR) & 0x1F;
             //DB_PRINT("Write R_UART_DATA_CFG: TX: %08x, RX: %08x, BL: %02x\n", txaddr, rxaddr, bytes_left);
