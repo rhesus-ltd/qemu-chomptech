@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: configure
-      run: ./configure --target-list="arm-softmmu" --enable-fdt --disable-vnc --enable-cocoa --audio-drv-list=coreaudio --python=/opt/local/bin/python3 --disable-kvm --prefix=$(pwd)/release
+      run: ./configure --target-list="arm-softmmu" --enable-fdt --disable-vnc --enable-cocoa --audio-drv-list=coreaudio --disable-kvm --prefix=$(pwd)/release
     - name: make
       run: make
     - name: make check
