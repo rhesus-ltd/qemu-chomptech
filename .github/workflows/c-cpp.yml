@@ -17,5 +17,4 @@ jobs:
       run: ./configure --target-list="arm-softmmu" --enable-fdt --disable-vnc --disable-kvm --prefix=$(pwd)/release
     - name: make
       run: make
-    - name: make check
-      run: make check
+
