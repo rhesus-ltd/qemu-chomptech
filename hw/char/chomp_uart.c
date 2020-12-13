@@ -152,8 +152,8 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
     uint32_t r = 0;
     addr >>= 2;
 
-    uint32_t txaddr = 0;
-    uint32_t rxaddr = 0;
+//    uint32_t txaddr = 0;
+//    uint32_t rxaddr = 0;
 
     switch (addr)
     {
@@ -168,9 +168,9 @@ uart_read(void *opaque, hwaddr addr, unsigned int size)
         case R_UART_DATA_CFG:
            // DB_PRINT("R_UART_DATA_CFG\n");
             r = s->regs[R_UART_DATA_CFG];
-            txaddr = (r >> TX_ADDR) & 0x1F;
-            rxaddr = (r >> RX_ADDR) & 0x1F;
-            bytes_left = (r >> BYT_LEFT) & 0x3;
+        //    txaddr = (r >> TX_ADDR) & 0x1F;
+        //    rxaddr = (r >> RX_ADDR) & 0x1F;
+         //   bytes_left = (r >> BYT_LEFT) & 0x3;
          //   DB_PRINT("Read R_UART_DATA_CFG TX: %08x, RX: %08x, BL: %02x\n", txaddr, rxaddr, bytes_left); 
             break;
         case R_UART_BUF_TRSHLD:
@@ -191,8 +191,8 @@ uart_write(void *opaque, hwaddr addr,
     ChompUART *s = opaque;
     uint32_t value = val64;
 
-    uint32_t txaddr = 0;
-    uint32_t rxaddr = 0; 
+//    uint32_t txaddr = 0;
+//    uint32_t rxaddr = 0; 
 
     unsigned char ch =  address_space_ldq_le(s->as, /* FIXME: */ 0x0802fa80, MEMTXATTRS_UNSPECIFIED, NULL);
 
@@ -292,8 +292,8 @@ uart_write(void *opaque, hwaddr addr,
 
         case R_UART_DATA_CFG:
             bytes_left = (value >> BYT_LEFT) & 0x3;
-            txaddr = (value >> TX_ADDR) & 0x1F;
-            rxaddr = (value >> RX_ADDR) & 0x1F;
+//            txaddr = (value >> TX_ADDR) & 0x1F;
+//            rxaddr = (value >> RX_ADDR) & 0x1F;
             //DB_PRINT("Write R_UART_DATA_CFG: TX: %08x, RX: %08x, BL: %02x\n", txaddr, rxaddr, bytes_left);
             s->regs[R_UART_DATA_CFG] = value;
             break;
