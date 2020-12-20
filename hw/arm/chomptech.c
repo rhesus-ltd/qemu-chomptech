@@ -118,9 +118,6 @@ static void chomp_init(MachineState *machine)
     MemoryRegion *ocm_ram = g_new(MemoryRegion, 1);
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     DeviceState *dev, *slcr;
-    DriveInfo *dinfo;
-    DeviceState *att_dev;
-    unsigned long flash_size;
     //qemu_irq pic[64];
 
     cpu = ARM_CPU(object_new(machine->cpu_type));
@@ -175,47 +172,6 @@ static void chomp_init(MachineState *machine)
 
     // ---- NAND Controller -----------------------------------------------------------------
     dev = qdev_new("chomp,nfc");
-    /*
-    dinfo = drive_get_next(IF_NONE);
-    if(dinfo) {
-        printf("Try to register dinfo\n");
-        att_dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL, NAND_MFR_STMICRO, 0xaa);
-        object_property_set_link(OBJECT(dev), "blk", OBJECT(att_dev), &error_abort);
-        //object_property_set_link(OBJECT(dev), "blk", blk_by_legacy_dinfo(dinfo), &error_abort);
-    }*/
-
-    /* Register flash
-    dinfo = drive_get(IF_NONE, 0, 0);
-    if (dinfo) {
-        BlockBackend *blk = blk_by_legacy_dinfo(dinfo);
-        char data[256];
-        blk_pread(blk, 0, data, 32);
-        printf("First Word: %08x\n", *(uint32_t*)data);
-
-        flash_size = blk_getlength(blk);
-        if (flash_size != 8*1024*1024 && flash_size != 16*1024*1024 &&
-            flash_size != 32*1024*1024) {
-            error_report("Invalid flash image size");
-            exit(1);
-        }
-
-        //qdev_prop_set_uint32(dev, "drive", blk);
-        //object_property_set_link(OBJECT(dev), "drive", OBJECT(blk), &error_abort);
-        /*
-         * The original U-Boot accesses the flash at 0xFE000000 instead of
-         * 0xFF800000 (if there is 8 MB flash). So remap flash access if the
-         * image is smaller than 32 MB.
-         *
-        chomp_nfc_register(0x100000000ULL - MP_FLASH_SIZE_MAX,
-                              "chomptech.flash", flash_size,
-                              blk, 0x10000,
-                              MP_FLASH_SIZE_MAX / flash_size,
-                              2, 0x00BF, 0x236D, 0x0000, 0x0000,
-                              0x5555, 0x2AAA, 0);
-       
-    }*/
-    //sysbus_create_simple(TYPE_MV88W8618_FLASHCFG, CHOMP_FLASHCFG_BASE, NULL);
-
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x0404a000);
 
