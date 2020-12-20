@@ -1,5 +1,6 @@
 
 
+
 #include "qemu/osdep.h"
 #include "chardev/char-fe.h"
 #include "exec/address-spaces.h"
@@ -326,8 +327,7 @@ static void chomp_nfc_init(Object *obj)
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_STRONG);
 
-    s->as = &address_space_memory;
-                    
+    s->as = &address_space_memory;              
 }
 
 static Property chomp_nfc_properties[] = {
