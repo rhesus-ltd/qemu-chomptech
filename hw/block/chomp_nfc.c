@@ -1,23 +1,41 @@
+
+
 #include "qemu/osdep.h"
-#include "hw/hw.h"
-#include "hw/block/flash.h"
-#include "qapi/error.h"
-#include "qemu/timer.h"
-#include "sysemu/block-backend.h"
-#include "exec/address-spaces.h"
-#include "qemu/host-utils.h"
-#include "migration/vmstate.h"
-#include "hw/qdev-properties.h"
-#include "hw/sysbus.h"
-#include "qemu/log.h"
-#include "qemu/timer.h"
-#include "hw/irq.h"
-#include "hw/qdev-properties.h"
-#include "hw/sysbus.h"
-#include "qemu/module.h"
 #include "chardev/char-fe.h"
-#include "hw/registerfields.h"
+#include "exec/address-spaces.h"
+#include "hw/arm/boot.h"
+#include "hw/block/block.h"
+#include "hw/block/flash.h"
+#include "hw/boards.h"
+#include "hw/char/cadence_uart.h"
+#include "hw/cpu/a9mpcore.h"
+#include "hw/hw.h"
+#include "hw/irq.h"
+#include "hw/loader.h"
+#include "hw/misc/unimp.h"
+#include "hw/net/cadence_gem.h"
 #include "hw/ptimer.h"
+#include "hw/qdev-clock.h"
+#include "hw/qdev-properties.h"
+#include "hw/registerfields.h"
+#include "hw/sd/sdhci.h"
+#include "hw/ssi/ssi.h"
+#include "hw/sysbus.h"
+#include "hw/usb/chipidea.h"
+#include "migration/vmstate.h"
+#include "net/net.h"
+#include "qapi/error.h"
+#include "qemu/bitmap.h"
+#include "qemu/error-report.h"
+#include "qemu/host-utils.h"
+#include "qemu/log.h"
+#include "qemu/module.h"
+#include "qemu/timer.h"
+#include "qemu/units.h"
+#include "sysemu/block-backend.h"
+#include "sysemu/reset.h"
+#include "sysemu/sysemu.h"
+#include "trace.h"
 
 #define CHOMP_NFC_ERR_DEBUG 1
 
@@ -55,6 +73,8 @@ REG32(NFC_DAT_LEN_REG, 0x060)
 REG32(NFC_RAND_ENC_REG, 0x068)
 REG32(NFC_RAND_DEC_REG, 0x06C)
 
+REG32(ECC_CTRL, 0x11000)
+
 #define NFC_CTRL_REG_CMD_DONE_BIT    (1UL << 31)
 #define NFC_CTRL_REG_CMD_VALID_BIT   (1 << 30)
 #define NFC_CTRL_REG_STA_CLR_BIT     (1 << 14)
@@ -73,7 +93,7 @@ REG32(NFC_DATA_LEN, 0x060)
 REG32(NFC_RAND_ENC, 0x068)
 REG32(NFC_RAND_DEC, 0x06C)
 
-#define TYPE_CHOMP_NFC "chomp.nfc"
+#define TYPE_CHOMP_NFC "chomp,nfc"
 
 #define CHOMP_NFC(obj) \
      OBJECT_CHECK(CHOMP_NFCState, (obj), TYPE_CHOMP_NFC)
@@ -86,19 +106,13 @@ typedef struct CHOMP_NFCItf {
 
 typedef struct CHOMP_NFCState {
     SysBusDevice parent_obj;
-
     MemoryRegion mmio;
 
-    /* FIXME: add support for multiple chip selects/interface */
-
-    CHOMP_NFCItf itf[2];
-
-    /* FIXME: add Interrupt support */
-
-    /* FIXME: add ECC support */
-
-    uint8_t x; /* the "x" in chomp_nfc */
+    BlockBackend *blk;
+    DriveInfo *drv;
+    AddressSpace *as;
 } CHOMP_NFCState;
+
 
 static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
                          unsigned int size)
@@ -117,11 +131,16 @@ static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
           //  printf("haga\n");
             break;
         case R_NFC_CTRL:
-          //  printf("nfc status\n");
+            printf("nfc status\n");
             ret |= NFC_CTRL_REG_CMD_DONE_BIT;
             break;
+        case R_ECC_CTRL:
+            DB_PRINT("ECC CTRL READ!\n");
+            ret |= 0x40;
+            ret |= 0x02000000;
+            break;
         default:
-            //DB_PRINT("Unimplemented read access reg=" TARGET_FMT_plx "\n", addr * 4);
+            DB_PRINT("Unimplemented read access reg=" TARGET_FMT_plx "\n", addr * 4);
             break;
     }
     return ret;
@@ -130,8 +149,10 @@ static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
 static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
                       unsigned int size)
 {
-    //CHOMP_NFCState *s = opaque; 
+    CHOMP_NFCState *s = opaque; 
     //DB_PRINT("addr=%x v=%x\n", (unsigned)addr, (unsigned)value64);
+    char dest[256];
+    uint32_t value = value64;
     addr >>= 2;
     /* FIXME: implement */
     switch(addr) {
@@ -139,10 +160,78 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
             printf("NFC_RAND_DEC write\n");
             break;
         case R_NFC_COMMAND:
-            printf("NFC_COMMAND write\n");
+            printf("NFC_COMMAND write: %08x\n", (uint32_t)value64);
+            if(value & NFC_CMD_REG_LAST_BIT) {
+                printf("NFC_CMD_REG_LAST_BIT write\n");
+            }
+
+            if(value & NFC_CMD_REG_CNT_EN_BIT) {
+                printf("NFC_CMD_REG_CNT_EN_BIT write\n");
+            }
+
+            if(value & NFC_CMD_REG_RE_BIT) {
+                printf("NFC_CMD_REG_RE_BIT write\n");
+            }
+
+            if(value & NFC_CMD_REG_DAT_BIT) {
+                printf("NFC_CMD_REG_DAT_BIT write\n");
+            }
+
+            if(value & NFC_CMD_REG_RES_BIT) {
+               printf("NFC_CMD_REG_RES_BIT write\n");
+            }
+            
+            if(value & (0xFFF << NFC_CMD_REG_INFO_POS)) {
+               printf("NFC_CMD_REG_INFO_POS write: %04x\n", (value >> 11) & 0xFFF);
+            }
+            
+            if(value & NFC_CMD_REG_DELAY_BIT) {
+               printf("NFC_CMD_REG_DELAY_BIT write\n");
+            }
+            
+            if(value & NFC_CMD_REG_WAIT_JUMP_BIT) {
+               printf("NFC_CMD_REG_WAIT_JUMP_BIT write\n");
+            }
+            
+            if(value & NFC_CMD_REG_STF_EN_BIT) {
+               printf("NFC_CMD_REG_STF_EN_BIT write\n");
+            }
+
+            if(value & NFC_CMD_REG_CMD_BIT) {
+               printf("NFC_CMD_REG_CMD_BIT write\n");
+            }
+            
+            if(value & NFC_CMD_REG_WE_BIT) {
+               printf("NFC_CMD_REG_WE_BIT write\n");
+            }
+            
+            if(value & NFC_CMD_REG_CLE_BIT) {
+               printf("NFC_CMD_REG_CLE_BIT write\n");
+            }
+            
+            if(value & NFC_CMD_REG_ALE_BIT) {
+               printf("NFC_CMD_REG_ALE_BIT write\n");
+            }
             break;
         case R_NFC_CTRL:
             printf("nfc status write\n");
+            if(value & NFC_CTRL_REG_CMD_VALID_BIT) {
+                blk_pread(s->blk, 0, dest, 0x100);
+                printf("First Word: %8p, %08x\n", s->blk, *(unsigned int*)dest);
+                for(int i = 0; i < 0x100/4; i++) { // This is wrong.. so wrong.. FIXME:
+                    printf("Store: %08x to %08x\n", *((uint32_t*)dest + i), 0x0802f800 + i * 4);
+                    address_space_stl_le(s->as, 0x0802f800 + i * 4, *((uint32_t*)dest + i), MEMTXATTRS_UNSPECIFIED, NULL); //copy the shit to the guest memory
+                }
+                printf("Command valid bit set\n");
+            }
+
+            if(value & NFC_CTRL_REG_CE0_SEL_BIT) {
+                printf("Chipselect asserted\n");
+            }
+
+            if(value & NFC_CTRL_REG_CE_SAVE_BIT) {
+                printf("NFC_CTRL_REG_CE_SAVE_BIT asserted\n");
+            }
             break;
         case R_NFC_DAT_REG1:
             printf("nfc reg1 write\n");
@@ -192,32 +281,65 @@ static void chomp_nfc_realize(DeviceState *dev, Error **errp)
         chomp_nfc_init_sram(sbd, &s->itf[itfn]);
     }
     */
+    /* Register flash - This is wrong - fix me */
+     unsigned long flash_size;
+     DriveInfo *dinfo;
+    dinfo = drive_get(IF_NONE, 0, 0);
+    if (dinfo) {
+        s->blk = blk_by_legacy_dinfo(dinfo);
+        char data[256];
+        blk_pread(s->blk, 0, data, 32);
+        printf("First Word: %08x\n", *(uint32_t*)data);
+
+        flash_size = blk_getlength(s->blk);
+        if (flash_size != 8*1024*1024 && flash_size != 16*1024*1024 &&
+            flash_size != 32*1024*1024) {
+            error_report("Invalid flash image size");
+        //    exit(1);
+        }
+
+        //qdev_prop_set_uint32(dev, "drive", blk);
+        //object_property_set_link(OBJECT(dev), "drive", OBJECT(blk), &error_abort);
+        /*
+         * The original U-Boot accesses the flash at 0xFE000000 instead of
+         * 0xFF800000 (if there is 8 MB flash). So remap flash access if the
+         * image is smaller than 32 MB.
+         *
+        chomp_nfc_register(0x100000000ULL - MP_FLASH_SIZE_MAX,
+                              "chomptech.flash", flash_size,
+                              blk, 0x10000,
+                              MP_FLASH_SIZE_MAX / flash_size,
+                              2, 0x00BF, 0x236D, 0x0000, 0x0000,
+                              0x5555, 0x2AAA, 0);
+       */ 
+    }
 }
 
-static void chomp_nfc_initfn(Object *obj)
+static void chomp_nfc_init(Object *obj)
 {
     CHOMP_NFCState *s = CHOMP_NFC(obj);
 
     printf("Instance init\n");
 
-    object_property_add_link(obj, "dev0", TYPE_DEVICE,
-                             (Object **)&s->itf[0].dev,
+    object_property_add_link(obj, "blk", TYPE_DEVICE,
+                             (Object **)&s->blk,
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_STRONG);
+
+    s->as = &address_space_memory;
+                    
 }
 
 static Property chomp_nfc_properties[] = {
-    DEFINE_PROP_UINT8("x", CHOMP_NFCState, x, 3),
+    DEFINE_PROP_DRIVE("drive", CHOMP_NFCState, blk),
     DEFINE_PROP_END_OF_LIST(),
 };
 
 static const VMStateDescription vmstate_chomp_nfc = {
-    .name = "chomp_nfc",
+    .name = "chomp,nfc",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(itf[0].nand_pending_addr_cycles, CHOMP_NFCState),
-        VMSTATE_UINT8(itf[1].nand_pending_addr_cycles, CHOMP_NFCState),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -236,7 +358,7 @@ static TypeInfo chomp_nfc_info = {
     .parent         = TYPE_SYS_BUS_DEVICE,
     .instance_size  = sizeof(CHOMP_NFCState),
     .class_init     = chomp_nfc_class_init,
-    .instance_init  = chomp_nfc_initfn,
+    .instance_init  = chomp_nfc_init,
 };
 
 static void chomp_nfc_register_types(void)
@@ -245,3 +367,4 @@ static void chomp_nfc_register_types(void)
 }
 
 type_init(chomp_nfc_register_types)
+
