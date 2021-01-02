@@ -65,6 +65,11 @@ REG32(NFC_COMMAND, 0x000)
 #define NFC_CMD_REG_ALE_BIT         (1 << 1)
 #define NFC_CMD_REG_LAST_BIT        (1 << 0)    // last command's bit0 set to 1
 
+#define NFC_CMD_REG_CMD_CONF        (NFC_CMD_REG_CLE_BIT | NFC_CMD_REG_WE_BIT | NFC_CMD_REG_CMD_BIT)
+#define NFC_CMD_REG_ADD_CONF        (NFC_CMD_REG_ALE_BIT | NFC_CMD_REG_WE_BIT | NFC_CMD_REG_CMD_BIT)
+#define NFC_CMD_REG_REG_IN_CONF    (NFC_CMD_REG_CNT_EN_BIT | NFC_CMD_REG_RE_BIT | NFC_CMD_REG_CMD_BIT)
+#define NFC_CMD_REG_WDATA_CONF      (NFC_CMD_REG_WE_BIT | NFC_CMD_REG_DAT_BIT | NFC_CMD_REG_CNT_EN_BIT)
+
 REG32(NFC_DAT_REG1, 0x051)
 REG32(NFC_DAT_REG2, 0x054)
 REG32(NFC_CTRL, 0x058)
@@ -95,6 +100,9 @@ REG32(NFC_RAND_DEC, 0x06C)
 
 #define TYPE_CHOMP_NFC "chomp,nfc"
 
+#define CHOMP_NFC_MMIO_SIZE     0x16000
+#define CHOMP_NFC_NUM_REGS      (CHOMP_NFC_MMIO_SIZE / 4)
+
 #define CHOMP_NFC(obj) \
      OBJECT_CHECK(CHOMP_NFCState, (obj), TYPE_CHOMP_NFC)
 
@@ -111,24 +119,50 @@ typedef struct CHOMP_NFCState {
     BlockBackend *blk;
     DriveInfo *drv;
     AddressSpace *as;
+
+    uint32_t buf_ptr;
+    uint32_t rd_reg_len;
+
+    uint8_t cycle;
+    uint16_t cmd;
+    uint16_t addr[5];
+    uint16_t addr_cnt;
+    uint16_t end;
+    uint16_t dly;
+
+    uint32_t regs[CHOMP_NFC_NUM_REGS];
 } CHOMP_NFCState;
 
 
 static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
                          unsigned int size)
 {
-    //CHOMP_NFCState *s = opaque;
-    uint32_t ret = 0;
+    CHOMP_NFCState *s = opaque;
 
     //DB_PRINT("Unimplemented read access reg=" TARGET_FMT_plx "\n", addr * 4);
 
     addr >>= 2;
+    uint32_t ret = s->regs[addr];
+
     switch (addr) {
         case R_NFC_RAND_DEC:
           //  printf("huga\n");
             break;
         case R_NFC_COMMAND:
-          //  printf("haga\n");
+        case R_NFC_COMMAND + 1:
+        case R_NFC_COMMAND + 2:
+        case R_NFC_COMMAND + 3:
+        case R_NFC_COMMAND + 4:
+        case R_NFC_COMMAND + 5:
+        case R_NFC_COMMAND + 6:
+        case R_NFC_COMMAND + 7:
+            printf("NFC_COMMAND read (cycle %d): %08x xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", addr, ret);
+            break;
+        case R_NFC_DAT_REG1:
+            printf("nfc reg1 read, %d, %d\n", s->rd_reg_len, s->buf_ptr++);
+            break;
+        case R_NFC_DAT_REG2:
+            printf("nfc reg2 read, %d, %d\n", s->rd_reg_len, s->buf_ptr++);
             break;
         case R_NFC_CTRL:
             printf("nfc status\n");
@@ -136,8 +170,9 @@ static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
             break;
         case R_ECC_CTRL:
             DB_PRINT("ECC CTRL READ!\n");
+            // ECC is always happy atm.
             ret |= 0x40;
-            ret |= 0x02000000;
+            ret |= 0x02000000; 
             break;
         default:
             DB_PRINT("Unimplemented read access reg=" TARGET_FMT_plx "\n", addr * 4);
@@ -154,35 +189,48 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
     char dest[256];
     uint32_t value = value64;
     addr >>= 2;
+    uint32_t r = s->regs[addr]; 
     /* FIXME: implement */
     switch(addr) {
         case R_NFC_RAND_DEC:
             printf("NFC_RAND_DEC write\n");
             break;
         case R_NFC_COMMAND:
-            printf("NFC_COMMAND write: %08x\n", (uint32_t)value64);
-            if(value & NFC_CMD_REG_LAST_BIT) {
-                printf("NFC_CMD_REG_LAST_BIT write\n");
-            }
-
+            printf("Start of Command Cyce ///////////////////////////////////////////////\n");
+        case R_NFC_COMMAND + 1:
+        case R_NFC_COMMAND + 2:
+        case R_NFC_COMMAND + 3:
+        case R_NFC_COMMAND + 4:
+        case R_NFC_COMMAND + 5:
+        case R_NFC_COMMAND + 6:
+        case R_NFC_COMMAND + 7:
+            s->cycle = addr;
+            uint16_t reg_info = (value >> NFC_CMD_REG_INFO_POS) & 0x3FF; 
+            printf("NFC_COMMAND write (cycle %d): %08x\n", addr, (uint32_t)value64);
+          
             if(value & NFC_CMD_REG_CNT_EN_BIT) {
                 printf("NFC_CMD_REG_CNT_EN_BIT write\n");
+                r |= NFC_CMD_REG_CNT_EN_BIT;
             }
 
             if(value & NFC_CMD_REG_RE_BIT) {
                 printf("NFC_CMD_REG_RE_BIT write\n");
+                r |= NFC_CMD_REG_RE_BIT;
             }
 
             if(value & NFC_CMD_REG_DAT_BIT) {
                 printf("NFC_CMD_REG_DAT_BIT write\n");
+                r |= NFC_CMD_REG_DAT_BIT; 
+                printf("NFC_CMD_REG_INFO_POS write: %04x\n", (value >> 11) & 0x3FF);
             }
 
             if(value & NFC_CMD_REG_RES_BIT) {
                printf("NFC_CMD_REG_RES_BIT write\n");
+               s->rd_reg_len = value & (0xFFF << NFC_CMD_REG_INFO_POS);
             }
             
-            if(value & (0xFFF << NFC_CMD_REG_INFO_POS)) {
-               printf("NFC_CMD_REG_INFO_POS write: %04x\n", (value >> 11) & 0xFFF);
+            if(value & (0x3FF << NFC_CMD_REG_INFO_POS)) {
+               printf("NFC_CMD_REG_INFO_POS write: %04x\n", (value >> 11) & 0x3FF);
             }
             
             if(value & NFC_CMD_REG_DELAY_BIT) {
@@ -199,30 +247,108 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
 
             if(value & NFC_CMD_REG_CMD_BIT) {
                printf("NFC_CMD_REG_CMD_BIT write\n");
+               s->buf_ptr = 0;
             }
             
             if(value & NFC_CMD_REG_WE_BIT) {
-               printf("NFC_CMD_REG_WE_BIT write\n");
+               printf("WRITE ENABLE\n");
+            } else {
+               printf("WRTIE DISABLE\n");
             }
             
             if(value & NFC_CMD_REG_CLE_BIT) {
-               printf("NFC_CMD_REG_CLE_BIT write\n");
+                printf("COMMAND LATCH ENABLE\n");
+            } else {
+                printf("COMMAND LATCH DISABLE\n");
             }
             
             if(value & NFC_CMD_REG_ALE_BIT) {
-               printf("NFC_CMD_REG_ALE_BIT write\n");
+               printf("ADDRESSS LATCH ENABLE\n");
+            } else {
+               printf("ADDRESSS LATCH DISABLE\n");
             }
+
+            if((value & NFC_CMD_REG_CMD_CONF) == NFC_CMD_REG_CMD_CONF) {
+                printf("NFC_CMD_REG_CMD_CONF ++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+                if(s->cycle == 0) {
+                    s->cmd = reg_info;
+                    printf("Commmand Cycle\n");
+                    s->addr_cnt = 0;
+                } else {
+                    s->end = reg_info;
+                /*    printf("End Cycle\n");
+                    printf("Got NAND command: %02x, ", s->cmd);
+                    for(int i = 0; i < s->addr_cnt ; i++) {
+                        printf("%02x, ",s->addr[i]);
+                    }
+                    printf("%02x\n", s->end); */
+                } 
+            }
+
+            if((value & NFC_CMD_REG_DELAY_BIT) == NFC_CMD_REG_DELAY_BIT) {
+                printf("NFC_CMD_REG_DELAY_BIT -------------------------------------------------------\n");
+                s->dly = reg_info;
+            }
+
+            if((value & NFC_CMD_REG_ADD_CONF) == NFC_CMD_REG_ADD_CONF) {
+                printf("NFC_CMD_REG_ADD_CONF ========================================================\n");
+                printf("%08x\n", value);
+                s->addr[s->addr_cnt] = reg_info;
+                s->addr_cnt++;
+            }
+
+            if((value & NFC_CMD_REG_REG_IN_CONF) == NFC_CMD_REG_REG_IN_CONF) {
+                printf("NFC_CMD_REG_REG_IN_CONF ========================================================\n");
+                printf("%08x\n", value);
+            }
+
+            if(value & NFC_CMD_REG_LAST_BIT) {
+                printf("EEEENNNNNDDDD of TRANSACTION oooooooooooooooooooooooooooooooooooo\n");
+                printf("NFC_CMD_REG_LAST_BIT write\n");
+                //r |= NFC_CMD_REG_LAST_BIT; 
+                printf("End Cycle\n");
+                    printf("Got NAND command: %02x, Address: ", s->cmd);
+                    for(int i = 0; i < s->addr_cnt ; i++) {
+                        printf("%02x, ",s->addr[i]);
+                    }
+                printf("End: %02x, Delay: %02x\n", s->end, s->dly);  
+
+                if(s->cmd == 0x0) {
+                    blk_pread(s->blk, 0x0, dest, 0x100);
+                    if(s->cmd == 0x0 && s->end == 0x0) {
+                        printf("RESET STATUS READ!\n");
+                        dest[0] = 0;
+                        dest[1] = 0;
+                        dest[2] = 0;
+                        dest[3] = (3 << 5);
+                    }
+                    for(int i = 0; i < 0x100/4; i++) {
+                        address_space_stl_le(s->as, 0x0802f800 + i * 4, *((uint32_t*)dest + i), MEMTXATTRS_UNSPECIFIED, NULL); 
+                    }
+                } else if(s->cmd == 0xFF) {
+                    printf("Reset command\n");
+                }
+                printf("EEEENNNNNDDDD of TRANSACTION oooooooooooooooooooooooooooooooooooo\n");
+            }
+
+           
             break;
         case R_NFC_CTRL:
             printf("nfc status write\n");
             if(value & NFC_CTRL_REG_CMD_VALID_BIT) {
-                blk_pread(s->blk, 0, dest, 0x100);
+                /*blk_pread(s->blk, 0x1C, dest, 0x100);
                 printf("First Word: %8p, %08x\n", s->blk, *(unsigned int*)dest);
                 for(int i = 0; i < 0x100/4; i++) { // This is wrong.. so wrong.. FIXME:
                     printf("Store: %08x to %08x\n", *((uint32_t*)dest + i), 0x0802f800 + i * 4);
                     address_space_stl_le(s->as, 0x0802f800 + i * 4, *((uint32_t*)dest + i), MEMTXATTRS_UNSPECIFIED, NULL); //copy the shit to the guest memory
                 }
+                */
                 printf("Command valid bit set\n");
+            }
+
+            if(value & NFC_CTRL_REG_STA_CLR_BIT) {
+                printf("Clear interface status\n");
+                s->regs[R_NFC_CTRL] &= ~NFC_CTRL_REG_STA_CLR_BIT;
             }
 
             if(value & NFC_CTRL_REG_CE0_SEL_BIT) {
@@ -233,22 +359,27 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
                 printf("NFC_CTRL_REG_CE_SAVE_BIT asserted\n");
             }
             break;
+       
+
+            printf("nfc whatever write %08x, %08x\n", addr * 4, value);
+//            break;
         case R_NFC_DAT_REG1:
-            printf("nfc reg1 write\n");
+            printf("nfc reg1 writei %08, %08\n", addr * 4, value);
             break;
         case R_NFC_DAT_REG2:
-            printf("nfc reg2 write\n");
+            printf("nfc reg2 write %08x, %08x\n", addr * 4, value);
             break;
         case R_NFC_CMD_LEN_REG:
-            printf("nfc cmd len write\n");
+            printf("nfc cmd len write %08x, %08x\n", addr * 4, value);
             break;
         case R_NFC_DAT_LEN_REG:
-            printf("nfc dat len write\n");
+            printf("nfc dat len write %08x, %08x\n", addr * 4, value);
             break;
         default:
-            DB_PRINT("Some other write\n");
+            DB_PRINT("Unimplemented write access reg=" TARGET_FMT_plx " Data: %08x\n", addr * 4, (uint32_t)value64);
     }
-    DB_PRINT("Unimplemented write access reg=" TARGET_FMT_plx " Data: %08x\n", addr * 4, (uint32_t)value64);
+
+    s->regs[addr] = r;
 }
 
 static const MemoryRegionOps chomp_nfc_ops = {
