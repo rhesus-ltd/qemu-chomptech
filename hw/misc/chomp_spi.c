@@ -53,7 +53,7 @@ typedef struct ChompSPIState {
 static uint64_t chomp_spi_read(void *opaque, hwaddr addr,
                                unsigned size)
 {
-    ChompSPIState *s = CHOMP_SPI(opaque);
+//    ChompSPIState *s = CHOMP_SPI(opaque);
     addr >>= 2;
 
     uint32_t ret = 0;
@@ -77,7 +77,7 @@ static void chomp_spi_write(void *opaque, hwaddr addr,
     switch(addr) {
     }
  
-    DB_PRINT("SPI WRITE addr: %08" HWADDR_PRIx ", Value: %08x\n", addr * 4, value);
+    DB_PRINT("SPI WRITE addr: %08" HWADDR_PRIx ", Value: %08x\n", addr * 4, (uint32_t)value);
 }
 
 static void chomp_spi_realize(DeviceState *dev, Error **errp)
