@@ -364,7 +364,7 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
             printf("nfc whatever write %08x, %08x\n", (int)(addr * 4), value);
 //            break;
         case R_NFC_DAT_REG1:
-            printf("nfc reg1 writei %08, %08\n", (int)(addr * 4), value);
+            printf("nfc reg1 writei %08x, %08x\n", (int)(addr * 4), value);
             break;
         case R_NFC_DAT_REG2:
             printf("nfc reg2 write %08x, %08x\n", (int)(addr * 4), value);
