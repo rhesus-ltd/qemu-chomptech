@@ -27,25 +27,25 @@ Building
 
 To build:
 
-```./configure --target-list="arm-softmmu" --enable-fdt --disable-vnc --disable-kvm --prefix=$(pwd)/release```
-```make```
+``./configure --target-list="arm-softmmu" --enable-fdt --disable-vnc --disable-kvm --prefix=$(pwd)/release``
+``make``
 
 Running
 ========
 
 To Run:
 
-```./arm-softmmu/qemu-system-arm -device loader,file=roms/chomptech/BIOS.bin -drive if=none,format=raw,file=flashdata.bin -machine chomptech -d unimp -S -gdb tcp::1234 --serial stdio```
+``./arm-softmmu/qemu-system-arm -device loader,file=roms/chomptech/BIOS.bin -drive if=none,format=raw,file=flashdata.bin -machine chomptech -d unimp -S -gdb tcp::1234 --serial stdio``
 
 Where BIOS.bin is the Mask-ROM from the chip and flashdata.bin is a copy of the NAND flash.
 
 You can attach a arm-eabi-none-gdb after starting using:
 
-```arm-eabi-none-gdb```
+``arm-eabi-none-gdb``
 
 and then attach using 
 
-```target remote :1234```
+``target remote :1234``
 
 
-(c) 2021 rrrh
+  (c) 2021 rrrh
