@@ -156,7 +156,7 @@ static uint64_t chomp_nfc_read(void *opaque, hwaddr addr,
         case R_NFC_COMMAND + 5:
         case R_NFC_COMMAND + 6:
         case R_NFC_COMMAND + 7:
-            printf("NFC_COMMAND read (cycle %d): %08x xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", addr, ret);
+            printf("NFC_COMMAND read (cycle %d): %08x xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", (int)addr, ret);
             break;
         case R_NFC_DAT_REG1:
             printf("nfc reg1 read, %d, %d\n", s->rd_reg_len, s->buf_ptr++);
@@ -206,7 +206,7 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
         case R_NFC_COMMAND + 7:
             s->cycle = addr;
             uint16_t reg_info = (value >> NFC_CMD_REG_INFO_POS) & 0x3FF; 
-            printf("NFC_COMMAND write (cycle %d): %08x\n", addr, (uint32_t)value64);
+            printf("NFC_COMMAND write (cycle %d): %08x\n", (int)addr, (uint32_t)value64);
           
             if(value & NFC_CMD_REG_CNT_EN_BIT) {
                 printf("NFC_CMD_REG_CNT_EN_BIT write\n");
@@ -361,19 +361,19 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
             break;
        
 
-            printf("nfc whatever write %08x, %08x\n", addr * 4, value);
+            printf("nfc whatever write %08x, %08x\n", (int)(addr * 4), value);
 //            break;
         case R_NFC_DAT_REG1:
-            printf("nfc reg1 writei %08, %08\n", addr * 4, value);
+            printf("nfc reg1 writei %08, %08\n", (int)(addr * 4), value);
             break;
         case R_NFC_DAT_REG2:
-            printf("nfc reg2 write %08x, %08x\n", addr * 4, value);
+            printf("nfc reg2 write %08x, %08x\n", (int)(addr * 4), value);
             break;
         case R_NFC_CMD_LEN_REG:
-            printf("nfc cmd len write %08x, %08x\n", addr * 4, value);
+            printf("nfc cmd len write %08x, %08x\n", (int)(addr * 4), value);
             break;
         case R_NFC_DAT_LEN_REG:
-            printf("nfc dat len write %08x, %08x\n", addr * 4, value);
+            printf("nfc dat len write %08x, %08x\n", (int)(addr * 4), value);
             break;
         default:
             DB_PRINT("Unimplemented write access reg=" TARGET_FMT_plx " Data: %08x\n", addr * 4, (uint32_t)value64);
