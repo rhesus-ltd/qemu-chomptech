@@ -214,7 +214,7 @@ static void chomp_slcr_reset_init(Object *obj, ResetType type)
     s->regs[R_CHIP_ID] = 0x3900; // FIXME: add as property
     s->regs[R_GPIO_DIR_1] = 0x0000; 
     s->regs[R_GPIO_DIR_2] = 0x1000; 
-    s->regs[R_GPIO_IN_1] = 0x3200; // 0x2000 -> USBBoot
+    s->regs[R_GPIO_IN_1] = 0x3200; // 0x3200 -> NAND, 0x3000 -> UART, 0x2000 -> USBBoot, 0x1000 -> Massboot?
     s->regs[R_TIMER1_CFG] = 0x02000000; 
 }
 
