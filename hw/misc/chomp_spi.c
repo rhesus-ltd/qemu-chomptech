@@ -164,8 +164,8 @@ static void chomp_spi_write(void *opaque, hwaddr addr,
 static void chomp_spi_realize(DeviceState *dev, Error **errp)
 {
     ChompSPIState *s = CHOMP_SPI(dev);
-        unsigned long flash_size;
-     DriveInfo *dinfo;
+    //    unsigned long flash_size;
+    DriveInfo *dinfo;
     dinfo = drive_get(IF_NONE, 0, 0);
     if (dinfo) {
         s->blk = blk_by_legacy_dinfo(dinfo);
@@ -173,7 +173,7 @@ static void chomp_spi_realize(DeviceState *dev, Error **errp)
         blk_pread(s->blk, 0, data, 32);
         printf("First Word: %08x\n", *(uint32_t*)data);
 
-        flash_size = blk_getlength(s->blk);
+//        flash_size = blk_getlength(s->blk);
     }
 }
 
