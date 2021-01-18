@@ -199,7 +199,7 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
             printf("NFC_RAND_DEC write\n");
             break;
         case R_NFC_COMMAND:
-            printf("Start of Command Cyce ///////////////////////////////////////////////\n");
+            printf("Start of Command Cyce //////////////////////////////////////////////////////\n");
             printf("RES | INF | DLY | WIT | DAT | STF | CMD | WE  | RE  | CNT | CLE | ALE | LST \n");
         case R_NFC_COMMAND + 1:
         case R_NFC_COMMAND + 2:
@@ -236,8 +236,8 @@ static void chomp_nfc_write(void *opaque, hwaddr addr, uint64_t value64,
 
                 s->addr_int++;
                 
-                uint32_t column = s->addr[0] << 8 | s->addr[1];
-                uint32_t row = (s->addr[2] << 16) | (s->addr[3] << 8) | s->addr[4];
+//                uint32_t column = s->addr[0] << 8 | s->addr[1];
+//                uint32_t row = (s->addr[2] << 16) | (s->addr[3] << 8) | s->addr[4];
 
 //                printf("Addr Int: %08x, Column: %d, Row: %d\n", s->addr_int, column, row);
             }
