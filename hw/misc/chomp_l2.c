@@ -38,95 +38,101 @@
 #define CHOMP_L2_NUM_REGS      (CHOMP_L2_MMIO_SIZE / 4)
 
 typedef struct ChompL2State {
-    SysBusDevice parent_obj;
-    MemoryRegion iomem;
-    hwaddr base;
+	SysBusDevice	parent_obj;
+	MemoryRegion	iomem;
+	hwaddr		base;
 
-    uint32_t regs[CHOMP_L2_NUM_REGS];
-} ChompL2State;
+	uint32_t	regs   [CHOMP_L2_NUM_REGS];
+}		ChompL2State;
 
 
 #define TYPE_CHOMP_L2 "chomptech,l2"
 #define CHOMP_L2(obj) OBJECT_CHECK(ChompL2State, (obj), TYPE_CHOMP_L2)
 
 
-static uint64_t chomp_l2_read(void *opaque, hwaddr addr,
-                               unsigned size)
+static uint64_t 
+chomp_l2_read(void *opaque, hwaddr addr,
+	      unsigned size)
 {
-    addr >>= 2;
+	addr >>= 2;
 
-    switch (addr) {
-    }
+	switch (addr) {
+	}
 
-    DB_PRINT("addr: %08" HWADDR_PRIx "\n", addr * 4);
+	DB_PRINT("addr: %08" HWADDR_PRIx "\n", addr * 4);
 
-    return 0;
+	return 0;
 }
 
-static void chomp_l2_write(void *opaque, hwaddr addr,
-                            uint64_t value, unsigned size)
-{    
-    addr >>= 2;
+static void 
+chomp_l2_write(void *opaque, hwaddr addr,
+	       uint64_t value, unsigned size)
+{
+	addr >>= 2;
 
-    switch (addr) {
-    default:
-        break;
-    }
+	switch (addr) {
+	default:
+		break;
+	}
 
-    DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, (uint32_t)value);
+	DB_PRINT("addr: %08" HWADDR_PRIx " data: %08" PRIx32 "\n", addr * 4, (uint32_t) value);
 }
 
 
-static void chomp_l2_realize(DeviceState *dev, Error **errp)
+static void 
+chomp_l2_realize(DeviceState * dev, Error ** errp)
 {
- //   ChompL2State *s = CHOMP_L2(dev);
+	//ChompL2State * s = CHOMP_L2(dev);
 }
 
 static const VMStateDescription vmstate_chomp_l2 = {
-    .name = "chomp_l2",
-    .version_id = 3,
-    .minimum_version_id = 2,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32_ARRAY(regs, ChompL2State, CHOMP_L2_NUM_REGS),
-        VMSTATE_END_OF_LIST()
-    }
+	.name = "chomp_l2",
+	.version_id = 3,
+	.minimum_version_id = 2,
+	.fields = (VMStateField[]) {
+		VMSTATE_UINT32_ARRAY(regs, ChompL2State, CHOMP_L2_NUM_REGS),
+		VMSTATE_END_OF_LIST()
+	}
 };
 
-static void chomp_l2_class_init(ObjectClass *klass, void *data)
+static void 
+chomp_l2_class_init(ObjectClass * klass, void *data)
 {
-    DeviceClass *dc = DEVICE_CLASS(klass);
+	DeviceClass    *dc = DEVICE_CLASS(klass);
 
-    dc->vmsd = &vmstate_chomp_l2;
-    dc->realize = chomp_l2_realize;
+	dc->vmsd = &vmstate_chomp_l2;
+	dc->realize = chomp_l2_realize;
 }
 
 static const MemoryRegionOps chomp_l2_ops = {
-    .read = chomp_l2_read,
-    .write = chomp_l2_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
+	.read = chomp_l2_read,
+	.write = chomp_l2_write,
+	.endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static void chomp_l2_init(Object *obj)
+static void 
+chomp_l2_init(Object * obj)
 {
-    ChompL2State *s = CHOMP_L2(obj);
-    memory_region_init_io(&s->iomem, obj, &chomp_l2_ops, s, "chomp.l2",
-                          CHOMP_L2_MMIO_SIZE);
-    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
+	ChompL2State   *s = CHOMP_L2(obj);
+	memory_region_init_io(&s->iomem, obj, &chomp_l2_ops, s, "chomp.l2",
+			      CHOMP_L2_MMIO_SIZE);
+	sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
 }
 
 
 
 static const TypeInfo chomp_l2_info = {
-    .name          = TYPE_CHOMP_L2,
-    .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(ChompL2State),
-    .instance_init = chomp_l2_init,
-    .class_init    = chomp_l2_class_init,
+	.name = TYPE_CHOMP_L2,
+	.parent = TYPE_SYS_BUS_DEVICE,
+	.instance_size = sizeof(ChompL2State),
+	.instance_init = chomp_l2_init,
+	.class_init = chomp_l2_class_init,
 };
 
-static void chomp_l2_register_types(void)
+static void 
+chomp_l2_register_types(void)
 {
-    type_register_static(&chomp_l2_info);
+	type_register_static(&chomp_l2_info);
 }
 
 type_init(chomp_l2_register_types)
