@@ -21,6 +21,21 @@
 #include "hw/qdev-clock.h"
 #include "sysemu/reset.h"
 
+#include "qemu/osdep.h"
+#include "hw/block/block.h"
+#include "hw/block/flash.h"
+#include "hw/qdev-properties.h"
+#include "qapi/error.h"
+#include "qemu/error-report.h"
+#include "qemu/bitmap.h"
+#include "qemu/timer.h"
+#include "sysemu/block-backend.h"
+#include "qemu/host-utils.h"
+#include "qemu/module.h"
+#include "hw/sysbus.h"
+#include "migration/vmstate.h"
+#include "trace.h"
+
 #define TYPE_CHOMP_MACHINE MACHINE_TYPE_NAME("chomptech")
 #define CHOMP_MACHINE(obj) \
     OBJECT_CHECK(ChompMachineState, (obj), TYPE_CHOMP_MACHINE)
@@ -47,8 +62,19 @@
 
 #define CHOMP_SDHCI_CAPABILITIES 0x69ec0080  /* Datasheet: UG585 (v1.12.1) */
 
+#define MP_FLASH_SIZE_MAX       32*1024*1024
+
 #define ARMV7_IMM16(x) (extract32((x),  0, 12) | \
                         extract32((x), 12,  4) << 16)
+
+
+#define CHOMP_FLASHCFG_BASE        0x0404a000
+#define CHOMP_FLASHCFG_SIZE        0x00002000
+
+#define TYPE_MV88W8618_FLASHCFG "mv88w8618_flashcfg"
+#define MV88W8618_FLASHCFG(obj) \
+    OBJECT_CHECK(mv88w8618_flashcfg_state, (obj), TYPE_MV88W8618_FLASHCFG)
+
 
 /* Write immediate val to address r0 + addr. r0 should contain base offset
  * of the SLCR block. Clobbers r1.
@@ -92,8 +118,6 @@ static void chomp_init(MachineState *machine)
     MemoryRegion *ocm_ram = g_new(MemoryRegion, 1);
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     DeviceState *dev, *slcr;
-    DriveInfo *dinfo;
-    DeviceState *att_dev;
     //qemu_irq pic[64];
 
     cpu = ARM_CPU(object_new(machine->cpu_type));
@@ -105,8 +129,7 @@ static void chomp_init(MachineState *machine)
     qdev_realize(DEVICE(cpu), NULL, &error_fatal);
 
     // 64k of mask ROM
-    memory_region_init_rom(ocm_ram, NULL, "chomp.rom", 64 * KiB,
-                           &error_fatal);
+    memory_region_init_rom(ocm_ram, NULL, "chomp.rom", 64 * KiB, &error_fatal);
     memory_region_add_subregion(address_space_mem, 0x00000000, ocm_ram);
 
     // 192k of OCM
@@ -147,17 +170,8 @@ static void chomp_init(MachineState *machine)
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04010000);
 
-
     // ---- NAND Controller -----------------------------------------------------------------
-    dev = qdev_new("chomp.nfc");
-    object_property_add_child(container_get(qdev_get_machine(), "/unattached"),
-                              "nfc", OBJECT(dev));
-    dinfo = drive_get_next(IF_PFLASH);
-    att_dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo)
-                              : NULL,
-                        NAND_MFR_STMICRO, 0xaa);
-    object_property_set_link(OBJECT(dev), "dev0", OBJECT(att_dev), &error_abort);
-
+    dev = qdev_new("chomp,nfc");
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x0404a000);
 
@@ -168,7 +182,7 @@ static void chomp_init(MachineState *machine)
     chomp_binfo.board_setup_addr = BOARD_SETUP_ADDR;
     chomp_binfo.write_board_setup = chomp_write_board_setup;
 
-    create_unimplemented_device("USB", 0x04070000, 0x1000);
+//    create_unimplemented_device("USB", 0x04070000, 0x1000);
         
     arm_load_kernel(ARM_CPU(first_cpu), machine, &chomp_binfo);
 }
