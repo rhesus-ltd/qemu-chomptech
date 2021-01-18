@@ -129,6 +129,7 @@ static void chomp_init(MachineState *machine)
     qdev_realize(DEVICE(cpu), NULL, &error_fatal);
 
     // 64k of mask ROM
+
     memory_region_init_rom(ocm_ram, NULL, "chomp.rom", 64 * KiB, &error_fatal);
     memory_region_add_subregion(address_space_mem, 0x00000000, ocm_ram);
 
@@ -169,6 +170,7 @@ static void chomp_init(MachineState *machine)
     dev = qdev_new("chomptech,l2");
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, 0x04010000);
+
 
     // ---- NAND Controller -----------------------------------------------------------------
     dev = qdev_new("chomp,nfc");
